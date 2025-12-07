@@ -1,0 +1,442 @@
+// ========== LAYER TOGGLE ==========
+function toggleLayer(layer) {
+    // Tắt tất cả layers khác (chỉ hiển thị 1 layer tại một thời điểm)
+    Object.keys(activeLayers).forEach(key => {
+        if (key !== layer) {
+            activeLayers[key] = false;
+            const item = document.querySelector(`.layer-item[onclick*="${key}"]`);
+            const toggle = document.getElementById(`toggle-${key}`);
+            if (item) item.classList.remove('active');
+            if (toggle) toggle.classList.remove('active');
+        }
+    });
+
+    // Toggle layer được chọn
+    activeLayers[layer] = !activeLayers[layer];
+
+    const item = document.querySelector(`.layer-item[onclick*="${layer}"]`);
+    const toggle = document.getElementById(`toggle-${layer}`);
+
+    if (activeLayers[layer]) {
+        if (item) item.classList.add('active');
+        if (toggle) toggle.classList.add('active');
+
+        console.log(`🎨 Đang bật layer: ${layer}`);
+        loadAndRenderLayer(layer);
+    } else {
+        if (item) item.classList.remove('active');
+        if (toggle) toggle.classList.remove('active');
+        
+        console.log(`🔌 Đang tắt layer: ${layer}`);
+        clearAllOverlays();
+    }
+}
+
+// ========== LOAD & RENDER LAYER ==========
+async function loadAndRenderLayer(layer) {
+    console.log(`📥 Đang tải dữ liệu cho layer: ${layer}`);
+    
+    const file = await getLatestGrib();
+    if (!file) {
+        console.error("❌ Không tìm thấy file GRIB mới nhất.");
+        alert("Chưa có dữ liệu GRIB. Vui lòng đợi hệ thống tải dữ liệu.");
+        return;
+    }
+
+    console.log('📂 File GRIB:', file);
+
+    try {
+        const res = await fetch(`/grib-json?file=${file}`);
+        if (!res.ok) {
+            console.error('❌ Lỗi API /grib-json:', res.status, res.statusText);
+            alert(`Lỗi tải dữ liệu: ${res.statusText}`);
+            return;
+        }
+
+        forecastData = await res.json();
+        console.log('✅ Đã tải xong dữ liệu GRIB. Keys:', Object.keys(forecastData || {}));
+
+        // Render layer tương ứng
+        renderCurrentForecast();
+    } catch (err) {
+        console.error('❌ Lỗi khi tải GRIB JSON:', err);
+        alert(`Lỗi: ${err.message}`);
+    }
+}
+
+// ========== RENDER CURRENT FORECAST ==========
+function renderCurrentForecast() {
+    if (!forecastData) {
+        console.warn('⚠️ Chưa có dữ liệu forecast');
+        return;
+    }
+
+    // Xóa tất cả overlays trước
+    clearAllOverlays();
+
+    // Render layer đang active
+    if (activeLayers.pressure) {
+        renderPressureHeatmap(forecastData);
+    } else if (activeLayers.wind) {
+        renderWindHeatmap(forecastData);
+    } else if (activeLayers.temp) {
+        renderTempHeatmap(forecastData);
+    }
+}
+
+// ========== CLEAR ALL OVERLAYS ==========
+function clearAllOverlays() {
+    if (pressureOverlay) {
+        try { 
+            map.removeLayer(pressureOverlay); 
+            pressureOverlay = null;
+            console.log('🗑️ Đã xóa overlay');
+        } catch(e) { 
+            console.warn('Lỗi khi xóa overlay:', e); 
+        }
+    }
+}
+
+// ========== 1. PRESSURE HEATMAP (ENHANCED) ==========
+function renderPressureHeatmap(data) {
+    console.log('🌡️ === VẼ PRESSURE HEATMAP ===');
+    
+    const latitude = data.lat || data.latitude;
+    const longitude = data.lon || data.longitude;
+    const prmsl = data.prmsl || data.msl;
+
+    if (!latitude || !longitude || !prmsl) {
+        console.error('❌ Thiếu dữ liệu áp suất:', {
+            hasLat: !!latitude,
+            hasLon: !!longitude,
+            hasPrmsl: !!prmsl,
+            dataKeys: Object.keys(data)
+        });
+        alert('Lỗi: File GRIB không chứa dữ liệu áp suất (prmsl)');
+        return;
+    }
+
+    console.log(`📊 Kích thước dữ liệu: lat=${latitude.length}, lon=${longitude.length}, prmsl=${prmsl.length}x${prmsl[0]?.length}`);
+
+    const filtered = filterSouthChinaSea(latitude, longitude, prmsl);
+    if (!filtered) {
+        console.error('❌ Không có dữ liệu trong khu vực Biển Đông');
+        alert('Lỗi: Không tìm thấy dữ liệu trong khu vực Biển Đông');
+        return;
+    }
+
+    const { filteredLat, filteredLon, filteredData, latMin, latMax, lonMin, lonMax } = filtered;
+    
+    console.log(`📍 Vùng Biển Đông: Lat ${latMin.toFixed(2)}°-${latMax.toFixed(2)}°, Lon ${lonMin.toFixed(2)}°-${lonMax.toFixed(2)}°`);
+    console.log(`📊 Số điểm dữ liệu: ${filteredLat.length} x ${filteredLon.length} = ${filteredLat.length * filteredLon.length}`);
+    
+    // Tìm min/max áp suất
+    let pmin = Infinity, pmax = -Infinity, validPoints = 0;
+    for (let row of filteredData) {
+        for (let val of row) {
+            if (val != null && !isNaN(val)) {
+                validPoints++;
+                if (val < pmin) pmin = val;
+                if (val > pmax) pmax = val;
+            }
+        }
+    }
+
+    console.log(`📊 Áp suất: Min=${(pmin/100).toFixed(1)} hPa, Max=${(pmax/100).toFixed(1)} hPa`);
+    console.log(`✅ Số điểm dữ liệu hợp lệ: ${validPoints}/${filteredLat.length * filteredLon.length}`);
+
+    // === VẼ CANVAS VỚI CELL SIZE LỚN HƠN ===
+    const cellSize = 6; // Tăng từ 4 → 6 để dễ nhìn hơn
+    const width = filteredLon.length * cellSize;
+    const height = filteredLat.length * cellSize;
+
+    console.log(`🎨 Kích thước canvas: ${width}x${height} px`);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+
+    // Vẽ từng cell
+    let drawnCells = 0;
+    for (let i = 0; i < filteredLat.length; i++) {
+        for (let j = 0; j < filteredLon.length; j++) {
+            const v = filteredData[i][j];
+
+            if (v == null || isNaN(v)) {
+                ctx.fillStyle = 'rgba(0,0,0,0)'; // Trong suốt
+            } else {
+                const pressureHpa = v / 100; // Pa → hPa
+                ctx.fillStyle = pressureColorEnhanced(pressureHpa);
+                drawnCells++;
+            }
+
+            // Vẽ từ dưới lên (vì latitude thường giảm dần)
+            const y = height - (i + 1) * cellSize;
+            ctx.fillRect(j * cellSize, y, cellSize, cellSize);
+        }
+    }
+
+    console.log(`✅ Đã vẽ ${drawnCells} cells có dữ liệu`);
+
+    // Thêm overlay lên bản đồ
+    const imageUrl = canvas.toDataURL();
+    
+    pressureOverlay = L.imageOverlay(imageUrl, [[latMin, lonMin], [latMax, lonMax]], {
+        opacity: 0.85,  // Tăng opacity để rõ hơn
+        zIndex: 650,
+        interactive: false
+    }).addTo(map);
+    
+    // Đảm bảo overlay nằm trên các layer khác
+    if (pressureOverlay.bringToFront) {
+        pressureOverlay.bringToFront();
+    }
+    
+    console.log('✅ ĐÃ VẼ XONG PRESSURE HEATMAP');
+    console.log(`🗺️ Overlay bounds: [${latMin}, ${lonMin}] → [${latMax}, ${lonMax}]`);
+}
+
+// ========== ENHANCED PRESSURE COLOR (Độ tương phản cao hơn) ==========
+function pressureColorEnhanced(p) {
+    // p đã ở đơn vị hPa
+    
+    if (p < 940) return "rgba(139, 0, 0, 0.9)";       // Đỏ đậm - Super Typhoon
+    if (p < 960) return "rgba(255, 0, 0, 0.9)";       // Đỏ - Typhoon mạnh
+    if (p < 980) return "rgba(255, 102, 0, 0.9)";     // Cam đỏ - Tropical Storm
+    if (p < 995) return "rgba(255, 204, 0, 0.9)";     // Vàng - Áp thấp nhiệt đới
+    if (p < 1005) return "rgba(255, 255, 102, 0.85)"; // Vàng nhạt
+    if (p < 1010) return "rgba(102, 204, 102, 0.85)"; // Xanh lá - Bình thường
+    if (p < 1015) return "rgba(51, 153, 255, 0.85)";  // Xanh dương
+    if (p < 1020) return "rgba(0, 102, 204, 0.85)";   // Xanh đậm
+    return "rgba(102, 51, 153, 0.85)";                 // Tím - Áp cao
+}
+
+// ========== 2. WIND HEATMAP (ENHANCED) ==========
+function renderWindHeatmap(data) {
+    console.log('💨 === VẼ WIND HEATMAP ===');
+    
+    const latitude = data.lat || data.latitude;
+    const longitude = data.lon || data.longitude;
+    const u_wind = data.u || data.u10;
+    const v_wind = data.v || data.v10;
+
+    if (!latitude || !longitude || !u_wind || !v_wind) {
+        console.error('❌ Thiếu dữ liệu gió:', {
+            hasLat: !!latitude,
+            hasLon: !!longitude,
+            hasU: !!u_wind,
+            hasV: !!v_wind
+        });
+        alert('Lỗi: File GRIB không chứa dữ liệu gió (u10, v10)');
+        return;
+    }
+
+    // Tính tốc độ gió: sqrt(u^2 + v^2)
+    const windSpeed = [];
+    for (let i = 0; i < u_wind.length; i++) {
+        const row = [];
+        for (let j = 0; j < u_wind[i].length; j++) {
+            const u = u_wind[i][j];
+            const v = v_wind[i][j];
+            if (u != null && v != null && !isNaN(u) && !isNaN(v)) {
+                row.push(Math.sqrt(u * u + v * v)); // m/s
+            } else {
+                row.push(null);
+            }
+        }
+        windSpeed.push(row);
+    }
+
+    const filtered = filterSouthChinaSea(latitude, longitude, windSpeed);
+    if (!filtered) {
+        console.error('❌ Không có dữ liệu gió trong khu vực Biển Đông');
+        return;
+    }
+
+    const { filteredLat, filteredLon, filteredData, latMin, latMax, lonMin, lonMax } = filtered;
+    
+    // Tìm min/max gió
+    let wmin = Infinity, wmax = -Infinity;
+    for (let row of filteredData) {
+        for (let val of row) {
+            if (val != null && !isNaN(val)) {
+                if (val < wmin) wmin = val;
+                if (val > wmax) wmax = val;
+            }
+        }
+    }
+
+    console.log(`💨 Gió: Min=${wmin.toFixed(1)} m/s, Max=${wmax.toFixed(1)} m/s`);
+
+    // Vẽ canvas
+    const cellSize = 6;
+    const width = filteredLon.length * cellSize;
+    const height = filteredLat.length * cellSize;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+
+    for (let i = 0; i < filteredLat.length; i++) {
+        for (let j = 0; j < filteredLon.length; j++) {
+            const ws = filteredData[i][j];
+
+            if (ws == null || isNaN(ws)) {
+                ctx.fillStyle = 'rgba(0,0,0,0)';
+            } else {
+                ctx.fillStyle = windColorEnhanced(ws);
+            }
+
+            const y = height - (i + 1) * cellSize;
+            ctx.fillRect(j * cellSize, y, cellSize, cellSize);
+        }
+    }
+
+    const imageUrl = canvas.toDataURL();
+    pressureOverlay = L.imageOverlay(imageUrl, [[latMin, lonMin], [latMax, lonMax]], {
+        opacity: 0.85,
+        zIndex: 650
+    }).addTo(map);
+    
+    console.log('✅ ĐÃ VẼ XONG WIND HEATMAP');
+}
+
+function windColorEnhanced(ws) {
+    if (ws < 0.5) return "rgba(240, 240, 240, 0.7)";  // Trắng xám
+    if (ws < 2) return "rgba(160, 245, 255, 0.85)";   // Xanh rất nhạt
+    if (ws < 5) return "rgba(93, 219, 255, 0.85)";    // Xanh lơ
+    if (ws < 8) return "rgba(51, 181, 255, 0.85)";    // Xanh sáng
+    if (ws < 11) return "rgba(255, 255, 102, 0.85)";  // Vàng nhạt
+    if (ws < 14) return "rgba(255, 238, 68, 0.85)";   // Vàng
+    if (ws < 17) return "rgba(255, 204, 34, 0.85)";   // Vàng đậm
+    if (ws < 21) return "rgba(255, 153, 0, 0.85)";    // Cam
+    if (ws < 25) return "rgba(255, 102, 0, 0.9)";     // Cam đậm
+    if (ws < 29) return "rgba(255, 51, 0, 0.9)";      // Đỏ cam
+    if (ws < 33) return "rgba(255, 0, 0, 0.9)";       // Đỏ
+    if (ws < 38) return "rgba(204, 0, 102, 0.9)";     // Đỏ tím
+    return "rgba(153, 0, 255, 0.9)";                   // Tím
+}
+
+// ========== 3. TEMPERATURE HEATMAP (ENHANCED) ==========
+function renderTempHeatmap(data) {
+    console.log('🌡️ === VẼ TEMPERATURE HEATMAP ===');
+    
+    const latitude = data.lat || data.latitude;
+    const longitude = data.lon || data.longitude;
+    const temp = data.temp || data.t || data.t2m;
+
+    if (!latitude || !longitude || !temp) {
+        console.error('❌ Thiếu dữ liệu nhiệt độ:', {
+            hasLat: !!latitude,
+            hasLon: !!longitude,
+            hasTemp: !!temp
+        });
+        alert('Lỗi: File GRIB không chứa dữ liệu nhiệt độ');
+        return;
+    }
+
+    const filtered = filterSouthChinaSea(latitude, longitude, temp);
+    if (!filtered) {
+        console.error('❌ Không có dữ liệu nhiệt độ trong khu vực Biển Đông');
+        return;
+    }
+
+    const { filteredLat, filteredLon, filteredData, latMin, latMax, lonMin, lonMax } = filtered;
+    
+    // Tìm min/max nhiệt độ
+    let tmin = Infinity, tmax = -Infinity;
+    for (let row of filteredData) {
+        for (let val of row) {
+            if (val != null && !isNaN(val)) {
+                if (val < tmin) tmin = val;
+                if (val > tmax) tmax = val;
+            }
+        }
+    }
+
+    // Kiểm tra đơn vị (Kelvin hay Celsius)
+    const isKelvin = tmin > 200;
+    console.log(`🌡️ Nhiệt độ: Min=${isKelvin ? (tmin-273.15).toFixed(1) : tmin.toFixed(1)}°C, Max=${isKelvin ? (tmax-273.15).toFixed(1) : tmax.toFixed(1)}°C`);
+
+    // Vẽ canvas
+    const cellSize = 6;
+    const width = filteredLon.length * cellSize;
+    const height = filteredLat.length * cellSize;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+
+    for (let i = 0; i < filteredLat.length; i++) {
+        for (let j = 0; j < filteredLon.length; j++) {
+            const t = filteredData[i][j];
+
+            if (t == null || isNaN(t)) {
+                ctx.fillStyle = 'rgba(0,0,0,0)';
+            } else {
+                const tempC = isKelvin ? (t - 273.15) : t;
+                ctx.fillStyle = tempColorEnhanced(tempC);
+            }
+
+            const y = height - (i + 1) * cellSize;
+            ctx.fillRect(j * cellSize, y, cellSize, cellSize);
+        }
+    }
+
+    const imageUrl = canvas.toDataURL();
+    pressureOverlay = L.imageOverlay(imageUrl, [[latMin, lonMin], [latMax, lonMax]], {
+        opacity: 0.85,
+        zIndex: 650
+    }).addTo(map);
+    
+    console.log('✅ ĐÃ VẼ XONG TEMPERATURE HEATMAP');
+}
+
+function tempColorEnhanced(c) {
+    if (c < 5) return "rgba(75, 0, 130, 0.85)";      // Tím đậm
+    if (c < 10) return "rgba(0, 0, 204, 0.85)";      // Xanh dương đậm
+    if (c < 15) return "rgba(0, 102, 255, 0.85)";    // Xanh dương
+    if (c < 20) return "rgba(0, 204, 255, 0.85)";    // Xanh lơ
+    if (c < 23) return "rgba(0, 255, 153, 0.85)";    // Xanh lá nhạt
+    if (c < 26) return "rgba(102, 255, 102, 0.85)";  // Xanh lá
+    if (c < 28) return "rgba(255, 255, 0, 0.85)";    // Vàng
+    if (c < 30) return "rgba(255, 204, 0, 0.85)";    // Vàng đậm
+    if (c < 32) return "rgba(255, 153, 0, 0.85)";    // Cam
+    if (c < 34) return "rgba(255, 102, 0, 0.9)";     // Cam đậm
+    if (c < 36) return "rgba(255, 51, 0, 0.9)";      // Đỏ cam
+    return "rgba(204, 0, 0, 0.9)";                    // Đỏ đậm
+}
+
+// ========== FILTER TO SOUTH CHINA SEA ==========
+function filterSouthChinaSea(latitude, longitude, data) {
+    const filteredLat = latitude.filter(lat => lat >= 3 && lat <= 26);
+    const filteredLon = longitude.filter(lon => lon >= 100 && lon <= 121);
+
+    if (filteredLat.length === 0 || filteredLon.length === 0) return null;
+
+    const filteredData = [];
+    for (let i = 0; i < latitude.length; i++) {
+        if (latitude[i] >= 3 && latitude[i] <= 26) {
+            const row = [];
+            for (let j = 0; j < longitude.length; j++) {
+                if (longitude[j] >= 100 && longitude[j] <= 121) {
+                    row.push(data[i][j]);
+                }
+            }
+            filteredData.push(row);
+        }
+    }
+
+    return {
+        filteredLat,
+        filteredLon,
+        filteredData,
+        latMin: Math.min(...filteredLat),
+        latMax: Math.max(...filteredLat),
+        lonMin: Math.min(...filteredLon),
+        lonMax: Math.max(...filteredLon)
+    };
+}
