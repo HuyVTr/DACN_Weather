@@ -300,7 +300,7 @@ def api_get_forecast():
 
         # 5. Fetch AQI (Chỉ số không khí)
         try:
-            aqi_url = f"https://api.waqi.info/feed/geo:{province.latitude};{province.longitude}/?token=demo"
+            aqi_url = f"https://api.waqi.info/feed/geo:{province['latitude']};{province['longitude']}/?token=demo"
             aqi_response = requests.get(aqi_url, timeout=5)
             if aqi_response.status_code == 200:
                 aqi_json = aqi_response.json()
