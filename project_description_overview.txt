@@ -1,0 +1,36 @@
+2.8 Mô hình toán và lý giải xây dựng mô hình
+2.8.1. Tổng quan về thuật toán XGBoost (Tối giản)
+Trong dự án của chúng ta, mô hình XGBoost được sử dụng như một thuật toán nền tảng để giải quyết bài toán dự báo các chỉ số thời tiết cơ bản như nhiệt độ, độ ẩm, và tốc độ gió. Dựa trên dữ liệu lịch sử, mô hình này học các quy luật và đưa ra dự đoán cho các điều kiện thời tiết chung.
+
+Lý do chọn XGBoost: Đây là một thuật toán mạnh mẽ, hiệu quả và có độ chính xác đã được kiểm chứng, rất phù hợp cho các bài toán dự báo có cấu trúc. Trong khuôn khổ dự án chuyên ngành, nó đóng vai trò là mô hình cơ sở, xử lý các tác vụ dự báo thời tiết hàng ngày, tạo nền tảng vững chắc cho các mô hình phức tạp hơn.
+
+2.8.2. Tổng quan về thuật toán Temporal Fusion Transformer (TFT)
+Đối với bài toán dự báo quỹ đạo bão, một nhiệm vụ đòi hỏi độ chính xác và khả năng diễn giải cao, chúng ta sử dụng mô hình Temporal Fusion Transformer (TFT). Đây là một kiến trúc Deep Learning tiên tiến được thiết kế chuyên biệt cho dữ liệu chuỗi thời gian.
+
+Tư duy cốt lõi ("Fusion"): TFT kết hợp các cơ chế sau:
+- Trí nhớ ngắn hạn (RNN/GRU): Giúp mô hình nắm bắt các diễn biến gần của cơn bão (ví dụ: xu hướng di chuyển trong 24-72 giờ qua).
+- Tầm nhìn xa (Transformer - Attention): Cho phép mô hình "nhìn lại" và xác định các mẫu hình bão tương tự trong toàn bộ dữ liệu lịch sử, giúp dự báo các bước ngoặt quan trọng và giảm nhiễu.
+
+Kiến trúc này giúp mô hình không chỉ dự báo chính xác mà còn có khả năng diễn giải, cho biết những yếu tố nào (quá khứ, các biến thời tiết) đang ảnh hưởng nhiều nhất đến dự báo.
+
+2.8.3 Triển khai trong dự án
+Bước 1 - Thu thập và xử lý dữ liệu:
+- Dữ liệu đầu vào: Hệ thống sử dụng dữ liệu dự báo toàn cầu (GFS) ở định dạng GRIB2, được xử lý bởi các module trong thư mục `data_pipeline`.
+- Dữ liệu huấn luyện bão: Dữ liệu lịch sử về bão được tổng hợp từ nhiều nguồn uy tín (ví dụ: IBTrACS) và được lưu trữ trong `project_data/data_train`.
+
+Bước 2 - Xử lý đặc trưng (Feature Engineering):
+- Các kịch bản trong `data_pipeline` (như `data_cleaning.py`, `data_loader.py`) thực hiện việc làm sạch, chuyển đổi và tạo ra các đặc trưng cần thiết để cung cấp cho mô hình.
+
+Bước 3 - Huấn luyện mô hình:
+- XGBoost: Mô hình `weather_xgboost_multi.pkl` trong `services/forecast_ml` được huấn luyện để dự báo các chỉ số thời tiết chung.
+- TFT: Mô hình `final_storm_10f.pth` trong `services/storm_prediction_service` được huấn luyện chuyên biệt cho bài toán dự báo quỹ đạo bão.
+
+Bước 4 - Dự báo và Triển khai:
+- Các mô hình được tích hợp trong các dịch vụ (services) riêng biệt.
+- `backend_api` đóng vai trò là giao diện trung tâm, tiếp nhận yêu cầu, gọi đến các dịch vụ dự báo tương ứng và trả kết quả về cho người dùng thông qua giao diện web.
+
+2.8.4 Tổng kết
+Dự án của chúng ta áp dụng một cách tiếp cận đa mô hình để giải quyết bài toán dự báo thời tiết phức tạp:
+- Lựa chọn XGBoost: Là mô hình cơ sở, đáng tin cậy cho việc dự báo các điều kiện thời tiết hàng ngày. Nó đơn giản, hiệu quả và dễ triển khai.
+- Lựa chọn TFT: Là mô hình nâng cao, chuyên dụng cho nhiệm vụ dự báo bão, một bài toán chuỗi thời gian phức tạp đòi hỏi độ chính xác cao và khả năng nắm bắt các mẫu hình dài hạn.
+- Hệ thống tổng thể: Dữ liệu được xử lý qua `data_pipeline`, các mô hình được huấn luyện và phục vụ trong `services`, và `backend_api` cung cấp giao diện người dùng cuối, tạo thành một quy trình vận hành hoàn chỉnh và chuyên nghiệp.

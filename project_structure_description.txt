@@ -1,0 +1,51 @@
+Mô tả hệ thống
+
+● Frontend: Giao diện người dùng được xây dựng bằng các tệp HTML trong `backend_api/templates/` và các tài nguyên tĩnh (CSS, JS) trong `backend_api/static/`.
+
+● Backend: Logic chính được xử lý trong `backend_api/`, với `app.py` là điểm khởi đầu. Các `controllers/` điều hướng yêu cầu và các `models/` tương tác với dữ liệu.
+
+● Cơ sở dữ liệu: Dữ liệu thô và đã xử lý được lưu trữ trong `project_data/`. Hệ thống kết nối với cơ sở dữ liệu để lưu trữ và truy xuất thông tin người dùng, dữ liệu thời tiết và các dự đoán.
+
+● Thuật toán dự báo: Các mô hình dự báo thời tiết và bão được triển khai trong các dịch vụ chuyên biệt tại `services/forecast_ml/` và `services/storm_prediction_service/`.
+
+● Ghi log và xử lý lỗi: Hệ thống có khả năng hiển thị lỗi thông qua giao diện `backend_api/templates/errors/`. Việc lưu nhật ký hoạt động vào thư mục `logs/` là một phần của kế hoạch giám sát và khắc phục sự cố.
+
+Tổng quan hệ thống:
+
+Hệ thống dự báo thời tiết hoạt động theo kiến trúc microservices với luồng xử lý chính như sau:
+● Người dùng gửi yêu cầu thông qua giao diện web (được xây dựng trong `backend_api/templates/`).
+● `Controller` trong `backend_api/controllers/` nhận yêu cầu, xử lý và điều phối.
+● `Controller` tương tác với `Model` trong `backend_api/models/` để truy xuất dữ liệu hoặc gọi các dịch vụ dự báo chuyên biệt trong `services/forecast_ml/` và `services/storm_prediction_service/`.
+● Dữ liệu cần thiết được truy xuất từ cơ sở dữ liệu.
+● Kết quả được xử lý và trả về để hiển thị cho người dùng qua giao diện web.
+● Mọi hoạt động của hệ thống và các lỗi phát sinh được ghi lại nhằm mục đích giám sát và bảo trì.
+
+Các ràng buộc và yêu cầu kỹ thuật:
+
+1. Ràng buộc phần cứng và phần mềm:
+   ● Môi trường máy chủ: Cần một máy chủ để triển khai ứng dụng web và các dịch vụ.
+   ● Môi trường phát triển: Máy tính cần cài đặt Python và các thư viện được liệt kê trong `requirements.txt` (bao gồm Flask, XGBoost, PyTorch, etc.).
+   ● Lưu trữ: Cần dung lượng lưu trữ đủ lớn cho `project_data/` để chứa dữ liệu GRIB2 và các tệp dữ liệu huấn luyện.
+
+2. Ràng buộc bảo mật và hiệu suất:
+   ● Phân quyền truy cập: Cần triển khai cơ chế phân quyền giữa người dùng thông thường và quản trị viên.
+   ● Bảo vệ API: Các điểm cuối (endpoints) của API, đặc biệt là các dịch vụ dự báo, cần được bảo vệ để tránh truy cập trái phép.
+   ● Tối ưu hóa: Các truy vấn dữ liệu và hiệu suất của các mô hình trong `services/` cần được tối ưu để đảm bảo thời gian phản hồi nhanh.
+
+3. Các yêu cầu đặc thù:
+   ● Phạm vi địa lý: Hệ thống tập trung vào dự báo cho khu vực Biển Đông và Việt Nam.
+   ● Giới hạn thời gian dự báo: Các mô hình cung cấp dự báo cho một khoảng thời gian giới hạn trong tương lai (ví dụ: vài ngày tới).
+   ● Xuất dữ liệu: Hệ thống cần có khả năng xuất kết quả dự báo dưới dạng đồ họa (biểu đồ) và dữ liệu có cấu trúc (JSON, CSV).
+   ● Giao diện người dùng: Giao diện phải thân thiện, dễ sử dụng, và cho phép người dùng xem thông tin dự báo cơ bản mà không cần đăng nhập.
+
+Đánh giá kết quả và hạn chế:
+
+● Kết quả:
+  - Hệ thống hoạt động ổn định, có khả năng hiển thị dữ liệu dự báo từ các mô hình.
+  - Giao diện người dùng trực quan, dễ sử dụng.
+  - Các mô hình trong `services/forecast_ml` (ví dụ: XGBoost) cho kết quả dự báo tốt.
+
+● Hạn chế:
+  - Các mô hình hiện tại chưa hỗ trợ dự báo chi tiết theo từng giờ.
+  - Dữ liệu đầu vào và các dự đoán chưa được cập nhật tự động theo lịch trình. Cần một cơ chế (ví dụ: cron job) để tự động hóa `data_pipeline` và `services`.
+  - Chức năng thống kê và phân tích dữ liệu còn ở mức cơ bản, chưa khai thác sâu các xu hướng hoặc phát hiện các điểm bất thường.

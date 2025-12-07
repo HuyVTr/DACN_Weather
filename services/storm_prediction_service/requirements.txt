@@ -1,0 +1,16 @@
+# Core
+pandas
+numpy
+
+# Machine Learning
+torch
+scikit-learn
+scipy
+
+# Data Handling
+xarray
+cfgrib
+openpyxl
+
+# API/Web (optional, but good for integration)
+requests

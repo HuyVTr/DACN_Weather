@@ -18,7 +18,7 @@
             <a href="{{ url_for('main_bp.route_home') }}" class="nav-item">Trang chủ</a>
             <a href="{{ url_for('forecast_bp.route_forecast') }}" class="nav-item">Dự báo thời tiết</a>
             
-            <a href="http://127.0.0.1:8000/" class="nav-item">Bản đồ thời tiết</a>
+            <a href="{{ url_for('main_bp.route_weather_map') }}" class="nav-item">Bản đồ thời tiết</a>
             
             <a href="{{ url_for('chart_bp.route_chart') }}" class="nav-item">Biểu đồ</a>
 
@@ -38,9 +38,9 @@
     <div id="mobile-menu" class="lg:hidden h-0 overflow-hidden transition-all duration-500 ease-in-out bg-gray-800/95 backdrop-blur-sm">
         <div class="container mx-auto px-4 py-4 space-y-2">
             <a href="{{ url_for('main_bp.route_home') }}" class="mobile-nav-item">Trang chủ</a>
-            <a href="{{ url_for('forecast_bp.route_forecast') }}" class="mobile-nav-item">Bản đồ thời tiết</a>
+            <a href="{{ url_for('forecast_bp.route_forecast') }}" class="mobile-nav-item">Dự báo thời tiết</a>
             
-            <a href="http://127.0.0.1:8000/" class="mobile-nav-item">Bản đồ thời tiết </a>
+            <a href="{{ url_for('main_bp.route_weather_map') }}" class="mobile-nav-item">Bản đồ thời tiết</a>
 
             <a href="{{ url_for('chart_bp.route_chart') }}" class="mobile-nav-item">Biểu đồ</a>
             

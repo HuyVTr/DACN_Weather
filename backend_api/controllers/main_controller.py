@@ -77,6 +77,19 @@ def privacy():
     return render_template('privacy.html')
 
 @main_bp.route('/terms')
+
 def terms():
+
     """Trang Điều khoản sử dụng"""
+
     return render_template('terms.html')
+
+
+
+@main_bp.route('/weather-map')
+
+def route_weather_map():
+
+    """Phục vụ trang bản đồ thời tiết (tích hợp từ index_v2)."""
+
+    return render_template('weather_map.html', nav_active='weather_map')

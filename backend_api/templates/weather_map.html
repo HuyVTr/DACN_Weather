@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌀 Enhanced Storm Tracker V2</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet & Fonts for Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        
+        /* Hiệu ứng Pulse cho tâm bão */
+        .storm-marker {
+            background-color: rgba(239, 68, 68, 0.6);
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 1);
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        /* Label cho đảo */
+        .island-label {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            color: #fbbf24; /* Amber-400 */
+            font-weight: bold;
+            font-size: 14px;
+            text-shadow: 1px 1px 2px black;
+        }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none; 
+            background: transparent; 
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #60a5fa; /* Blue-400 */
+            cursor: pointer;
+            margin-top: -10px; 
+            box-shadow: 0 0 10px rgba(96, 165, 250, 0.8);
+            border: 2px solid white;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #475569;
+            border-radius: 2px;
+        }
+
+        /* Tùy chỉnh thanh cuộn */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.1); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.3); border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    {% raw %}
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // ====================================================================
+        // Map Modal Component
+        // ====================================================================
+        const MapModal = ({ onClose, forecastApiData }) => {
+            const mapRef = useRef(null);
+            const mapInstance = useRef(null);
+            const stormMarker = useRef(null);
+            const stormCircle = useRef(null);
+            const pathLine = useRef(null);
+
+            const [sliderIndex, setSliderIndex] = useState(0);
+            const [alerts, setAlerts] = useState([]);
+            
+            const forecastData = forecastApiData.data.map((d, i) => ({
+                ...d,
+                day: Math.floor(i / 24),
+                time: new Date(new Date(forecastApiData.analysis.timestamp).getTime() + d.hour * 60 * 60 * 1000)
+            }));
+            const baseData = {
+                stats: forecastApiData.stats,
+                origin: forecastApiData.origin
+            };
+            
+            // Effect to fetch all_alerts
+            useEffect(() => {
+                fetch('/api/all_alerts')
+                    .then(res => res.json())
+                    .then(setAlerts)
+                    .catch(err => console.error("Failed to fetch all_alerts:", err));
+            }, []);
+
+            useEffect(() => {
+                // Initialize map only once
+                if (!mapInstance.current && mapRef.current) {
+                    const map = L.map(mapRef.current, { zoomControl: false, attributionControl: false }).setView([14.5, 111.5], 5);
+                    mapInstance.current = map;
+
+                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                        attribution: 'Tiles &copy; Esri'
+                    }).addTo(map);
+                    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
+                        attribution: '&copy; CARTO',
+                        subdomains: 'abcd',
+                    }).addTo(map);
+
+                    // Add islands
+                    const sovereigntyIcon = L.divIcon({ html: '<i class="fa-solid fa-star text-yellow-400 text-lg"></i>', className: 'bg-transparent border-none' });
+                    L.marker([16.4, 112.0], {icon: sovereigntyIcon}).addTo(map).bindTooltip("QĐ. HOÀNG SA (VIỆT NAM)", {permanent: true, direction: 'top', className: 'island-label', offset: [0, -10]});
+                    L.marker([10.0, 114.0], {icon: sovereigntyIcon}).addTo(map).bindTooltip("QĐ. TRƯỜNG SA (VIỆT NAM)", {permanent: true, direction: 'top', className: 'island-label', offset: [0, -10]});
+                
+                    // Draw main storm path
+                    const latlngs = forecastData.map(d => [d.lat, d.lon]);
+                    pathLine.current = L.polyline(latlngs, {
+                        color: 'yellow',
+                        dashArray: '5, 10',
+                        weight: 3, // Make it more prominent
+                        opacity: 0.8
+                    }).addTo(map);
+                    
+                    map.fitBounds(pathLine.current.getBounds().pad(0.1));
+
+                    // Add initial marker and circle for the main storm
+                    const startPoint = [forecastData[0].lat, forecastData[0].lon];
+                    const stormIcon = L.divIcon({ className: 'storm-marker', iconSize: [20, 20] });
+                    stormMarker.current = L.marker(startPoint, {icon: stormIcon, zIndexOffset: 1000}).addTo(map);
+                    stormCircle.current = L.circle(startPoint, {
+                        color: 'red', fillColor: '#f03', fillOpacity: 0.15, radius: 100000 
+                    }).addTo(map);
+                }
+                
+                // Effect to add alert markers
+                if (mapInstance.current && alerts.length > 0) {
+                    alerts.forEach(alert => {
+                        const alertIcon = L.divIcon({
+                            className: 'bg-transparent border-none',
+                            html: `<span style="font-size: 24px; text-shadow: 0 0 3px black;">${alert.icon}</span>`
+                        });
+                        
+                        L.marker([alert.lat, alert.lon], { icon: alertIcon })
+                            .addTo(mapInstance.current)
+                            .bindPopup(`
+                                <div class="p-1">
+                                    <div class="font-bold text-base" style="color: ${alert.color};">${alert.type_vi}</div>
+                                    <div class="text-sm">${alert.details}</div>
+                                    <div class="text-xs text-gray-500">${alert.lat.toFixed(2)}°N, ${alert.lon.toFixed(2)}°E</div>
+                                </div>
+                            `);
+                    });
+                }
+
+            }, [alerts, forecastData]); // Rerun if alerts or forecastData change
+
+            // Update marker position when slider changes
+            useEffect(() => {
+                if (stormMarker.current && stormCircle.current && forecastData[sliderIndex]) {
+                    const newLatLng = [forecastData[sliderIndex].lat, forecastData[sliderIndex].lon];
+                    stormMarker.current.setLatLng(newLatLng);
+                    stormCircle.current.setLatLng(newLatLng);
+                    if (mapInstance.current) {
+                        mapInstance.current.panTo(newLatLng, {animate: true, duration: 0.5});
+                    }
+                }
+            }, [sliderIndex, forecastData]);
+
+            const currentPoint = forecastData[sliderIndex];
+            if (!currentPoint) return null; // Or a loading indicator
+            
+            const fmt = (n) => typeof n === 'number' ? n.toFixed(1) : '--';
+            const fmtInt = (n) => typeof n === 'number' ? n.toFixed(0) : '--';
+            const sliderLabel = sliderIndex === 0 ? "Hiện tại" : `+${currentPoint.hour}h (Ngày ${Math.floor(currentPoint.hour / 24)})`;
+            
+            return (
+                <div className="fixed inset-0 bg-gray-900 text-white z-50">
+                    <div ref={mapRef} className="absolute inset-0 z-0"></div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-gray-900/90 via-gray-900/40 to-transparent pointer-events-none z-10 w-full md:w-1/2 lg:w-1/3"></div>
+
+                    {/* Left Panel */}
+                    <div className="absolute top-0 left-0 h-full w-full md:w-[450px] z-20 p-6 overflow-y-auto custom-scrollbar flex flex-col gap-4 pointer-events-auto pb-32">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
+                                    <i className="fa-solid fa-hurricane mr-2"></i>Storm Tracker Map
+                                </h1>
+                                <p className="text-gray-400 text-sm mt-1">Hệ thống giám sát & Dự báo quỹ đạo</p>
+                            </div>
+                            <button onClick={onClose} className="bg-red-500/50 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-colors text-2xl">&times;</button>
+                        </div>
+
+                        <div className="bg-slate-800/80 backdrop-blur-md border border-slate-700 rounded-xl p-5 shadow-lg">
+                            <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                                <h2 className="text-lg font-semibold text-yellow-400"><i className="fa-solid fa-location-arrow mr-2"></i>Bão Chính</h2>
+                                <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded border border-red-500/30">{sliderLabel}</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-gray-400 text-xs">Vĩ độ</p>
+                                    <p className="text-xl font-mono font-bold">{fmt(currentPoint.lat)}°N</p>
+                                </div>
+                                <div>
+                                    <p className="text-gray-400 text-xs">Kinh độ</p>
+                                    <p className="text-xl font-mono font-bold">{fmt(currentPoint.lon)}°E</p>
+                                </div>
+                                <div>
+                                    <p className="text-gray-400 text-xs">Sức gió</p>
+                                    <p className="text-lg font-bold text-blue-300">{fmt(currentPoint.wind)} m/s</p>
+                                </div>
+                                <div>
+                                    <p className="text-gray-400 text-xs">Áp suất</p>
+                                    <p className="text-lg font-bold text-purple-300">{fmtInt(currentPoint.pressure)} hPa</p>
+                                </div>
+                            </div>
+                            <div className="mt-4 pt-3 border-t border-slate-700">
+                                <p className="text-xs text-gray-500 mb-1">Thời gian dự báo:</p>
+                                <p className="text-lg font-mono text-white font-bold">{currentPoint.time.toLocaleString('vi-VN', { weekday: 'short', hour: '2-digit', minute:'2-digit', day: '2-digit', month: '2-digit' })}</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-slate-800/80 backdrop-blur-md border border-slate-700 rounded-xl p-5 shadow-lg flex-grow">
+                             <h2 class="text-lg font-semibold text-blue-400 mb-4 border-b border-slate-700 pb-2"><i className="fa-solid fa-cloud-sun-rain mr-2"></i>Cảnh báo khác</h2>
+                             <div class="space-y-2 custom-scrollbar pr-2" style={{maxHeight: '200px', overflowY: 'auto'}}>
+                                {alerts.length > 0 ? alerts.map((alert, idx) => (
+                                    <div key={idx} className="bg-slate-700/50 p-3 rounded-lg flex items-center gap-3">
+                                        <div className="text-xl">{alert.icon}</div>
+                                        <div>
+                                            <p className="font-bold" style={{color: alert.color}}>{alert.type_vi}</p>
+                                            <p className="text-sm text-gray-300">{alert.details}</p>
+                                        </div>
+                                    </div>
+                                )) : (
+                                    <p className="text-sm text-gray-400">Không có cảnh báo điểm nào khác.</p>
+                                )}
+                             </div>
+                         </div>
+                    </div>
+                    
+                    {/* Timeline Slider */}
+                    <div className="absolute bottom-6 left-0 right-0 z-30 px-6 md:px-20 lg:px-64 pointer-events-none">
+                        <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-600 rounded-2xl p-4 shadow-2xl pointer-events-auto">
+                             <div class="flex justify-between items-center mb-2">
+                                <span class="text-xs font-bold text-blue-400 uppercase tracking-wider">Dự báo Quỹ Đạo Bão Chính</span>
+                                <span class="text-xs text-gray-400">{sliderLabel}</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0"
+                                max={forecastData.length - 1}
+                                value={sliderIndex}
+                                step="1"
+                                onChange={(e) => setSliderIndex(parseInt(e.target.value))}
+                                className="w-full"
+                            />
+                             <div class="flex justify-between text-xs text-gray-400 mt-1 font-mono">
+                                <span>Start</span>
+                                <span>End</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            );
+        };
+        // ====================================================================
+        // Main StormTracker Component
+        // ====================================================================
+        const StormTracker = () => {
+            const [data, setData] = useState(null);
+            const [weatherAnalysis, setWeatherAnalysis] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [showMap, setShowMap] = useState(false);
+            
+            useEffect(() => {
+                fetch('/api/forecast')
+                    .then(res => res.json())
+                    .then(result => {
+                        setData(result);
+                        setLoading(false);
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        setLoading(false);
+                    });
+                
+                fetch('/api/weather')
+                    .then(res => res.json())
+                    .then(result => {
+                        setWeatherAnalysis(result.weather_analysis);
+                    })
+                    .catch(err => console.error(err));
+            }, []);
+            
+            if (loading) {
+                return (
+                    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-purple-900">
+                        <div className="text-center">
+                            <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-cyan-400 mx-auto mb-4"></div>
+                            <div className="text-cyan-400 text-xl">Đang tải dữ liệu bão...</div>
+                        </div>
+                    </div>
+                );
+            }
+            
+            if (data?.status === 'error') {
+                return (
+                    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-purple-900">
+                        <div className="bg-red-500/20 border border-red-500 rounded-xl p-8 max-w-md">
+                            <div className="text-red-400 text-6xl mb-4 text-center">⚠️</div>
+                            <h2 className="text-2xl font-bold text-white mb-4 text-center">Lỗi</h2>
+                            <p className="text-gray-300 text-center">{data.message}</p>
+                            <div className="mt-6 text-center">
+                                <p className="text-sm text-gray-400 mb-4">Chạy lệnh này trong terminal:</p>
+                                <code className="bg-slate-800 px-4 py-2 rounded text-cyan-400 text-sm">
+                                    python storm_forecast_v2.py
+                                </code>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+            
+            const origin = data?.origin;
+            const trajectory = data?.trajectory;
+            const stats = data?.stats;
+            const hasWeatherFeatures = stats?.has_weather_features;
+            
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-6">
+                    {showMap && data?.status === 'success' && <MapModal onClose={() => setShowMap(false)} forecastApiData={data} />}
+                    
+                    <div className="max-w-7xl mx-auto mb-8">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="text-6xl">🌀</div>
+                                <div>
+                                    <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+                                        Storm Forecast System V2
+                                    </h1>
+                                    <p className="text-gray-400 mt-1">Hệ thống dự báo bão với phân tích thời tiết</p>
+                                    {hasWeatherFeatures && (
+                                        <div className="mt-2 inline-flex items-center gap-2 bg-green-500/20 border border-green-500/50 rounded-full px-3 py-1 text-xs">
+                                            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                                            <span className="text-green-400">Weather Features Active</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <button onClick={() => setShowMap(true)} className="bg-cyan-500 hover:bg-cyan-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                                Xem Bản Đồ
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Origin Info */}
+                        <div className="bg-slate-800/50 backdrop-blur border border-yellow-500/30 rounded-xl p-6">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="text-3xl">📍</div>
+                                <h2 className="text-2xl font-bold text-yellow-400">Nguồn Gốc Bão</h2>
+                            </div>
+                            
+                            <div className="space-y-4">
+                                <div className="bg-yellow-500/10 rounded-lg p-4">
+                                    <div className="text-sm text-yellow-400 mb-2">Khu vực hình thành</div>
+                                    <div className="text-2xl font-bold text-white">{origin?.zone}</div>
+                                    <div className="text-sm text-gray-400 mt-1">
+                                        Mức độ: <span className={`font-bold ${
+                                            origin?.risk_level === 'VERY_HIGH' ? 'text-red-400' : 'text-orange-400'
+                                        }`}>{origin?.risk_level}</span>
+                                    </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-slate-700/50 rounded-lg p-3">
+                                        <div className="text-xs text-gray-400">Vĩ độ</div>
+                                        <div className="text-lg font-bold">{origin?.lat?.toFixed(2)}°N</div>
+                                    </div>
+                                    <div className="bg-slate-700/50 rounded-lg p-3">
+                                        <div className="text-xs text-gray-400">Kinh độ</div>
+                                        <div className="text-lg font-bold">{origin?.lon?.toFixed(2)}°E</div>
+                                    </div>
+                                    <div className="bg-slate-700/50 rounded-lg p-3">
+                                        <div className="text-xs text-gray-400">Gió ban đầu</div>
+                                        <div className="text-lg font-bold text-red-400">{origin?.initial_wind?.toFixed(1)} m/s</div>
+                                    </div>
+                                    <div className="bg-slate-700/50 rounded-lg p-3">
+                                        <div className="text-xs text-gray-400">Áp suất</div>
+                                        <div className="text-lg font-bold text-cyan-400">{origin?.initial_pressure?.toFixed(0)} hPa</div>
+                                    </div>
+                                </div>
+                                
+                                {/* Weather Features at Origin */}
+                                {hasWeatherFeatures && origin?.sst && (
+                                    <div className="border-t border-gray-700 pt-4 mt-4">
+                                        <div className="text-sm text-gray-400 mb-3">Điều kiện thời tiết ban đầu</div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="bg-blue-500/10 rounded-lg p-3">
+                                                <div className="text-xs text-blue-400">SST</div>
+                                                <div className="text-lg font-bold">{origin?.sst?.toFixed(1)}°C</div>
+                                            </div>
+                                            <div className="bg-purple-500/10 rounded-lg p-3">
+                                                <div className="text-xs text-purple-400">Độ ẩm</div>
+                                                <div className="text-lg font-bold">{origin?.humidity?.toFixed(0)}%</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        
+                        {/* Trajectory */}
+                        <div className="bg-slate-800/50 backdrop-blur border border-cyan-500/30 rounded-xl p-6">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="text-3xl">🧭</div>
+                                <h2 className="text-2xl font-bold text-cyan-400">Quỹ Đạo</h2>
+                            </div>
+                            
+                            {trajectory && (
+                                <div className="space-y-4">
+                                    <div className="bg-cyan-500/10 rounded-lg p-4">
+                                        <div className="text-sm text-cyan-400 mb-2">Hướng di chuyển chủ đạo</div>
+                                        <div className="text-3xl font-bold text-white text-center">
+                                            {trajectory.dominant_direction}
+                                        </div>
+                                        <div className="text-sm text-gray-400 text-center mt-1">
+                                            {trajectory.dominant_bearing}°
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="bg-slate-700/50 rounded-lg p-3">
+                                            <div className="text-xs text-gray-400">Tổng quãng đường</div>
+                                            <div className="text-lg font-bold">{trajectory.total_distance_km} km</div>
+                                        </div>
+                                        <div className="bg-slate-700/50 rounded-lg p-3">
+                                            <div className="text-xs text-gray-400">Tốc độ TB</div>
+                                            <div className="text-lg font-bold">{trajectory.avg_speed_kmh} km/h</div>
+                                        </div>
+                                    </div>
+                                    
+                                    {trajectory.enters_south_china_sea && (
+                                        <div className="bg-orange-500/20 border border-orange-500/50 rounded-lg p-3">
+                                            <div className="text-sm font-bold text-orange-400 mb-1">
+                                                ⚠️ Vào Biển Đông
+                                            </div>
+                                            <div className="text-xs text-gray-300">
+                                                Giờ thứ {trajectory.scs_entry_point?.hour}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {trajectory.threatens_vietnam && (
+                                        <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3">
+                                            <div className="text-sm font-bold text-red-400">
+                                                🚨 Cảnh báo: Đe dọa Việt Nam
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Statistics */}
+                        <div className="bg-slate-800/50 backdrop-blur border border-purple-500/30 rounded-xl p-6">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="text-3xl">📊</div>
+                                <h2 className="text-2xl font-bold text-purple-400">Thống Kê</h2>
+                            </div>
+                            
+                            {stats && (
+                                <div className="space-y-3">
+                                    <div className="bg-slate-700/50 rounded-lg p-4">
+                                        <div className="text-sm text-gray-400">Gió mạnh nhất</div>
+                                        <div className="text-2xl font-bold text-red-400">{stats.max_wind?.toFixed(1)} m/s</div>
+                                    </div>
+                                    
+                                    <div className="bg-slate-700/50 rounded-lg p-4">
+                                        <div className="text-sm text-gray-400">Áp suất thấp nhất</div>
+                                        <div className="text-2xl font-bold text-cyan-400">{stats.min_pressure?.toFixed(0)} hPa</div>
+                                    </div>
+                                    
+                                    <div className="bg-slate-700/50 rounded-lg p-4">
+                                        <div className="text-sm text-gray-400">Nhiệt độ trung bình</div>
+                                        <div className="text-2xl font-bold text-orange-400">{stats.avg_temp?.toFixed(1)}°C</div>
+                                    </div>
+                                    
+                                    {hasWeatherFeatures && (
+                                        <>
+                                            <div className="bg-slate-700/50 rounded-lg p-4">
+                                                <div className="text-sm text-gray-400">SST trung bình</div>
+                                                <div className="text-2xl font-bold text-blue-400">{stats.avg_sst?.toFixed(1)}°C</div>
+                                            </div>
+                                            
+                                            <div className="bg-slate-700/50 rounded-lg p-4">
+                                                <div className="text-sm text-gray-400">Độ ẩm TB</div>
+                                                <div className="text-2xl font-bold text-purple-400">{stats.avg_humidity?.toFixed(0)}%</div>
+                                            </div>
+                                        </>
+                                    )}
+                                    
+                                    <div className="bg-slate-700/50 rounded-lg p-4">
+                                        <div className="text-sm text-gray-400">Thời lượng dự báo</div>
+                                        <div className="text-2xl font-bold text-purple-400">{stats.total_days} ngày</div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    
+                    {/* Weather Impact Analysis */}
+                    {weatherAnalysis && (
+                        <div className="max-w-7xl mx-auto mt-6">
+                            <div className="bg-slate-800/50 backdrop-blur border border-indigo-500/30 rounded-xl p-6">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="text-3xl">🌡️</div>
+                                    <h2 className="text-2xl font-bold text-indigo-400">Phân Tích Thời Tiết</h2>
+                                    <div className={`ml-auto px-4 py-2 rounded-full text-sm font-bold ${
+                                        weatherAnalysis.overall_strength === 'STRENGTHENING' ? 'bg-red-500/20 text-red-400' :
+                                        weatherAnalysis.overall_strength === 'WEAKENING' ? 'bg-green-500/20 text-green-400' :
+                                        'bg-gray-500/20 text-gray-400'
+                                    }`}>
+                                        {weatherAnalysis.overall_strength === 'STRENGTHENING' ? '📈 Bão đang mạnh lên' :
+                                         weatherAnalysis.overall_strength === 'WEAKENING' ? '📉 Bão đang suy yếu' :
+                                         '➡️ Ổn định'}
+                                    </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {weatherAnalysis.impacts?.map((impact, idx) => (
+                                        <div key={idx} className={`rounded-lg p-4 border ${
+                                            impact.effect === 'POSITIVE' ? 'bg-red-500/10 border-red-500/30' :
+                                            impact.effect === 'NEGATIVE' ? 'bg-green-500/10 border-green-500/30' :
+                                            'bg-gray-500/10 border-gray-500/30'
+                                        }`}>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <div className="text-sm font-bold text-gray-300">{impact.factor}</div>
+                                                <div className={`text-2xl ${
+                                                    impact.effect === 'POSITIVE' ? 'text-red-400' :
+                                                    impact.effect === 'NEGATIVE' ? 'text-green-400' :
+                                                    'text-gray-400'
+                                                }`}>
+                                                    {impact.effect === 'POSITIVE' ? '↑' :
+                                                     impact.effect === 'NEGATIVE' ? '↓' : '→'}
+                                                </div>
+                                            </div>
+                                            <div className="text-lg font-bold text-white mb-2">
+                                                {typeof impact.value === 'number' ? impact.value.toFixed(1) : impact.value}
+                                                {impact.factor === 'SST' || impact.factor === 'AIR_TEMP' ? '°C' :
+                                                 impact.factor === 'HUMIDITY' ? '%' :
+                                                 impact.factor === 'WIND_SHEAR' ? ' m/s' : ''}
+                                            </div>
+                                            <div className="text-xs text-gray-400">
+                                                {impact.description}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Path Changes */}
+                    {trajectory?.path_changes?.length > 0 && (
+                        <div className="max-w-7xl mx-auto mt-6">
+                            <div className="bg-slate-800/50 backdrop-blur border border-green-500/30 rounded-xl p-6">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <div className="text-3xl">🔄</div>
+                                    <h2 className="text-2xl font-bold text-green-400">Thay Đổi Hướng</h2>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {trajectory.path_changes.map((change, idx) => (
+                                        <div key={idx} className="bg-slate-700/50 rounded-lg p-4">
+                                            <div className="text-sm text-green-400 font-bold mb-2">
+                                                Giờ thứ {change.hour}
+                                            </div>
+                                            <div className="text-xs text-gray-400">
+                                                Từ {change.from_bearing.toFixed(0)}° → {change.to_bearing.toFixed(0)}°
+                                            </div>
+                                            <div className="text-xs text-gray-400">
+                                                Thay đổi: {change.change_degrees.toFixed(0)}°
+                                            </div>
+                                            <div className="text-xs text-gray-500 mt-2">
+                                                {change.location.lat.toFixed(2)}°N, {change.location.lon.toFixed(2)}°E
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    <div className="max-w-7xl mx-auto mt-8 text-center text-sm text-gray-500">
+                        Enhanced Storm Forecast System V2 - Weather-Aware Prediction
+                    </div>
+                </div>
+            );
+        };
+        
+        ReactDOM.render(<StormTracker />, document.getElementById('root'));
+    </script>
+    {% endraw %}
+</body>
+</html>

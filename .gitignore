@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual environment
+venvs/
+
+# Project specific
+project_data/
+terminal.txt
+word.txt
+word2.txt
+word3.txt
+
+# Old services
+services/realtime_weather_old/
