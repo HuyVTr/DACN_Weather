@@ -79,7 +79,7 @@ def create_app():
     app.config['JSON_AS_ASCII'] = False  # Hỗ trợ tiếng Việt
     
     # Khởi tạo database
-    db.init_app(app)
+    # db.init_app(app)
     
     # Đăng ký các Blueprints (routes/controllers)
     register_blueprints(app)

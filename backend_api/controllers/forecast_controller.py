@@ -20,30 +20,37 @@ from services.forecast_ml.predictor import predict_storm
 
 forecast_bp = Blueprint('forecast_bp', __name__)
 
-# --- CẤU HÌNH DATABASE CHO CONTROLLER ---
-# Lưu ý: Thay 'password' bằng mật khẩu thực của bạn
-DB_URI = "postgresql://postgres:password@localhost:5432/weather_db"
-db_engine = create_engine(DB_URI)
-
 @forecast_bp.route('/forecast')
 def route_forecast():
     """Phục vụ trang dự báo."""
     return render_template('forecast.html', nav_active='forecast')
 
+# --- CẤU HÌNH DATABASE CHO CONTROLLER ---
+# Lưu ý: Thay 'password' bằng mật khẩu thực của bạn
+# DB_URI = "postgresql://postgres:password@localhost:5432/weather_db"
+# db_engine = create_engine(DB_URI)
+
 @forecast_bp.route('/api/provinces')
 def api_get_provinces():
-    """API lấy danh sách 63 tỉnh."""
-    try:
-        provinces = Provinces.query.order_by(Provinces.name).all()
-        return jsonify([{
-            'province_id': p.province_id,
-            'name': p.name,
-            'latitude': p.latitude,
-            'longitude': p.longitude
-        } for p in provinces])
-    except Exception as e:
-        print(f"Lỗi /api/provinces: {e}")
-        return jsonify({"error": "Không thể lấy danh sách tỉnh"}), 500
+    """API lấy danh sách 63 tỉnh (mocked data)."""
+    # Dữ liệu tỉnh được hardcode vì không có DB
+    provinces_data = [
+        {'province_id': 1, 'name': 'Hà Nội', 'latitude': 21.0285, 'longitude': 105.8542},
+        {'province_id': 2, 'name': 'TP. Hồ Chí Minh', 'latitude': 10.8231, 'longitude': 106.6297},
+        {'province_id': 3, 'name': 'Đà Nẵng', 'latitude': 16.0544, 'longitude': 108.2022},
+        {'province_id': 4, 'name': 'Hải Phòng', 'latitude': 20.8449, 'longitude': 106.6881},
+        {'province_id': 5, 'name': 'Cần Thơ', 'latitude': 10.0452, 'longitude': 105.7468},
+        {'province_id': 6, 'name': 'Huế', 'latitude': 16.4637, 'longitude': 107.5909},
+        {'province_id': 7, 'name': 'Nha Trang', 'latitude': 12.2388, 'longitude': 109.1967},
+        {'province_id': 8, 'name': 'Vũng Tàu', 'latitude': 10.3458, 'longitude': 107.0805},
+        {'province_id': 9, 'name': 'Lào Cai', 'latitude': 22.4965, 'longitude': 103.9635},
+        {'province_id': 10, 'name': 'Quảng Ninh', 'latitude': 21.0180, 'longitude': 107.2245},
+    ]
+    
+    # Sắp xếp theo tên tỉnh
+    provinces_data_sorted = sorted(provinces_data, key=lambda p: p['name'])
+    
+    return jsonify(provinces_data_sorted)
 
 def merge_api_and_ml_data(api_data, ml_data, province_name):
     """
@@ -216,16 +223,29 @@ def api_get_forecast():
         return jsonify({"error": "Thiếu province"}), 400
 
     try:
-        # Tìm tỉnh trong DB
-        province = Provinces.query.filter_by(name=province_name).first()
+        # Tìm tỉnh từ danh sách hardcode
+        provinces_data = [
+            {'province_id': 1, 'name': 'Hà Nội', 'latitude': 21.0285, 'longitude': 105.8542},
+            {'province_id': 2, 'name': 'TP. Hồ Chí Minh', 'latitude': 10.8231, 'longitude': 106.6297},
+            {'province_id': 3, 'name': 'Đà Nẵng', 'latitude': 16.0544, 'longitude': 108.2022},
+            {'province_id': 4, 'name': 'Hải Phòng', 'latitude': 20.8449, 'longitude': 106.6881},
+            {'province_id': 5, 'name': 'Cần Thơ', 'latitude': 10.0452, 'longitude': 105.7468},
+            {'province_id': 6, 'name': 'Huế', 'latitude': 16.4637, 'longitude': 107.5909},
+            {'province_id': 7, 'name': 'Nha Trang', 'latitude': 12.2388, 'longitude': 109.1967},
+            {'province_id': 8, 'name': 'Vũng Tàu', 'latitude': 10.3458, 'longitude': 107.0805},
+            {'province_id': 9, 'name': 'Lào Cai', 'latitude': 22.4965, 'longitude': 103.9635},
+            {'province_id': 10, 'name': 'Quảng Ninh', 'latitude': 21.0180, 'longitude': 107.2245},
+        ]
+        
+        province = next((p for p in provinces_data if p['name'] == province_name), None)
         if not province:
             return jsonify({"error": "Không tìm thấy tỉnh"}), 404
 
         # 1. Gọi Open-Meteo API
         url = "https://api.open-meteo.com/v1/forecast"
         params = {
-            "latitude": province.latitude,
-            "longitude": province.longitude,
+            "latitude": province['latitude'],
+            "longitude": province['longitude'],
             "hourly": "temperature_2m,relative_humidity_2m,precipitation,rain,showers,weather_code,pressure_msl,wind_speed_10m,wind_direction_10m,visibility,uv_index",
             "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,sunrise,sunset",
             "current": "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,wind_speed_10m,pressure_msl,visibility,uv_index,weather_code",
@@ -241,36 +261,35 @@ def api_get_forecast():
         # 2. LẤY DỮ LIỆU ML (Ưu tiên Cache)
         ml_data = None
         try:
-            # Query bảng cache
-            query = text("SELECT forecast_data FROM weather_forecast_cache WHERE province_id = :pid")
-            with db_engine.connect() as conn:
-                result = conn.execute(query, {"pid": province.province_id}).fetchone()
+            # Query bảng cache (Bỏ qua vì không có DB)
+            # query = text("SELECT forecast_data FROM weather_forecast_cache WHERE province_id = :pid")
+            # with db_engine.connect() as conn:
+            #     result = conn.execute(query, {"pid": province.province_id}).fetchone()
             
-            # Nếu có dữ liệu trong Cache
-            if result and result[0]:
-                raw_data = result[0]
-                # Xử lý JSONB (thường SQLAlchemy trả về dict/list luôn, hoặc str)
-                if isinstance(raw_data, str):
-                    ml_data = json.loads(raw_data)
-                else:
-                    ml_data = raw_data
-                # print(f"⚡ [CACHE HIT] Đã lấy dữ liệu dự báo cho {province_name}")
+            # Nếu có dữ liệu trong Cache (Bỏ qua vì không có DB)
+            # if result and result[0]:
+            #     raw_data = result[0]
+            #     if isinstance(raw_data, str):
+            #         ml_data = json.loads(raw_data)
+            #     else:
+            #         ml_data = raw_data
+            # print(f"⚡ [CACHE HIT] Đã lấy dữ liệu dự báo cho {province_name}")
 
-            # 3. FALLBACK: Nếu Cache trống, chạy tính toán ngay lập tức (Chậm nhưng chắc)
-            if not ml_data:
-                print(f"🐢 [CACHE MISS] Đang tính toán realtime cho {province_name}...")
-                current_weather_data = {
-                    'temperature_2m': api_data.get("current", {}).get('temperature_2m', 25),
-                    'relative_humidity_2m': api_data.get("current", {}).get('relative_humidity_2m', 70),
-                    'pressure_msl': api_data.get("current", {}).get('pressure_msl', 1013),
-                    'wind_speed_10m': api_data.get("current", {}).get('wind_speed_10m', 5)
-                }
-                
-                ml_data = predict_storm(province.province_id, current_weather_data)
-                
-                if 'error' in ml_data:
-                    print(f"Lỗi ML prediction: {ml_data['error']}")
-                    ml_data = None
+            # 3. FALLBACK: Nếu Cache trống (luôn luôn đúng), chạy tính toán ngay lập tức
+            # if not ml_data: # Điều kiện này sẽ luôn đúng
+            print(f"🐢 [CACHE MISS] Đang tính toán realtime cho {province_name}...")
+            current_weather_data = {
+                'temperature_2m': api_data.get("current", {}).get('temperature_2m', 25),
+                'relative_humidity_2m': api_data.get("current", {}).get('relative_humidity_2m', 70),
+                'pressure_msl': api_data.get("current", {}).get('pressure_msl', 1013),
+                'wind_speed_10m': api_data.get("current", {}).get('wind_speed_10m', 5)
+            }
+            
+            ml_data = predict_storm(province['province_id'], current_weather_data)
+            
+            if 'error' in ml_data:
+                print(f"Lỗi ML prediction: {ml_data['error']}")
+                ml_data = None
 
         except Exception as e:
             print(f"Lỗi khi xử lý Cache/ML: {e}")

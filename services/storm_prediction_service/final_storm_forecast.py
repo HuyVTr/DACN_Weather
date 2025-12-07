@@ -1,3 +1,7 @@
+import warnings
+# Suppress specific UserWarning from cfgrib about index files
+warnings.filterwarnings("ignore", message=".*Ignoring index file.*", category=UserWarning)
+
 # ============================================================ 
 # FINAL STORM FORECAST - FINAL BOT-INTEGRATED VERSION 
 # ============================================================ 
