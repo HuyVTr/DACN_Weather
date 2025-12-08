@@ -205,16 +205,18 @@
             const [sliderIndex, setSliderIndex] = useState(0);
             const [alerts, setAlerts] = useState([]);
             
-            const forecastData = forecastApiData.data.map((d, i) => ({
+            // The data from the API uses uppercase keys like 'LAT', 'LON', 'WMO_WIND'.
+            const forecastData = forecastApiData.data;
+            const analysisData = forecastApiData.analysis;
+            
+            // Create a separate array with Date objects for easier use
+            const processedForecastData = forecastData.map((d, i) => ({
                 ...d,
                 day: Math.floor(i / 24),
-                time: new Date(new Date(forecastApiData.analysis.timestamp).getTime() + d.hour * 60 * 60 * 1000)
+                // The timestamp for time calculation may not always be in analysisData, handle this gracefully
+                time: analysisData ? new Date(new Date(analysisData.timestamp).getTime() + d.hour * 60 * 60 * 1000) : new Date()
             }));
-            const baseData = {
-                stats: forecastApiData.stats,
-                origin: forecastApiData.origin
-            };
-            
+
             // Effect to fetch all_alerts
             useEffect(() => {
                 fetch('/api/all_alerts')
@@ -224,96 +226,59 @@
             }, []);
 
             useEffect(() => {
-                // Initialize map only once
-                if (!mapInstance.current && mapRef.current) {
+                if (mapRef.current && !mapInstance.current) {
                     const map = L.map(mapRef.current, { zoomControl: false, attributionControl: false }).setView([14.5, 111.5], 5);
                     mapInstance.current = map;
 
-                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                        attribution: 'Tiles &copy; Esri'
-                    }).addTo(map);
-                    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
-                        attribution: '&copy; CARTO',
-                        subdomains: 'abcd',
-                    }).addTo(map);
+                    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles &copy; Esri' }).addTo(map);
+                    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', { attribution: '&copy; CARTO', subdomains: 'abcd' }).addTo(map);
 
-                    // Add islands
                     const sovereigntyIcon = L.divIcon({ html: '<i class="fa-solid fa-star text-yellow-400 text-lg"></i>', className: 'bg-transparent border-none' });
                     L.marker([16.4, 112.0], {icon: sovereigntyIcon}).addTo(map).bindTooltip("QĐ. HOÀNG SA (VIỆT NAM)", {permanent: true, direction: 'top', className: 'island-label', offset: [0, -10]});
                     L.marker([10.0, 114.0], {icon: sovereigntyIcon}).addTo(map).bindTooltip("QĐ. TRƯỜNG SA (VIỆT NAM)", {permanent: true, direction: 'top', className: 'island-label', offset: [0, -10]});
                 
-                    // Draw main storm path
-                    const latlngs = forecastData.map(d => [d.lat, d.lon]);
-                    pathLine.current = L.polyline(latlngs, {
-                        color: 'yellow',
-                        dashArray: '5, 10',
-                        weight: 3, // Make it more prominent
-                        opacity: 0.8
-                    }).addTo(map);
+                    // CORRECTED: Use 'LAT' and 'LON'
+                    const latlngs = processedForecastData.map(d => [d.LAT, d.LON]);
+                    pathLine.current = L.polyline(latlngs, { color: 'yellow', dashArray: '5, 10', weight: 3, opacity: 0.8 }).addTo(map);
                     
                     map.fitBounds(pathLine.current.getBounds().pad(0.1));
 
-                    // Add initial marker and circle for the main storm
-                    const startPoint = [forecastData[0].lat, forecastData[0].lon];
+                    // CORRECTED: Use 'LAT' and 'LON'
+                    const startPoint = [processedForecastData[0].LAT, processedForecastData[0].LON];
                     const stormIcon = L.divIcon({ className: 'storm-marker', iconSize: [20, 20] });
                     stormMarker.current = L.marker(startPoint, {icon: stormIcon, zIndexOffset: 1000}).addTo(map);
-                    stormCircle.current = L.circle(startPoint, {
-                        color: 'red', fillColor: '#f03', fillOpacity: 0.15, radius: 100000 
-                    }).addTo(map);
+                    stormCircle.current = L.circle(startPoint, { color: 'red', fillColor: '#f03', fillOpacity: 0.15, radius: 100000 }).addTo(map);
+
+                    setTimeout(() => { map.invalidateSize(); }, 10);
                 }
                 
-                // Effect to add alert markers
                 if (mapInstance.current && alerts.length > 0) {
                     alerts.forEach(alert => {
-                        const alertIcon = L.divIcon({
-                            className: 'bg-transparent border-none',
-                            html: `<span style="font-size: 24px; text-shadow: 0 0 3px black;">${alert.icon}</span>`
-                        });
-                        
+                        const alertIcon = L.divIcon({ className: 'bg-transparent border-none', html: `<span style="font-size: 24px; text-shadow: 0 0 3px black;">${alert.icon}</span>` });
                         L.marker([alert.lat, alert.lon], { icon: alertIcon })
                             .addTo(mapInstance.current)
-                            .bindPopup(`
-                                <div class="p-1">
-                                    <div class="font-bold text-base" style="color: ${alert.color};">${alert.type_vi}</div>
-                                    <div class="text-sm">${alert.details}</div>
-                                    <div class="text-xs text-gray-500">${alert.lat.toFixed(2)}°N, ${alert.lon.toFixed(2)}°E</div>
-                                </div>
-                            `);
+                            .bindPopup(`<div class="p-1"><div class="font-bold text-base" style="color: ${alert.color};">${alert.type_vi}</div><div class="text-sm">${alert.details}</div><div class="text-xs text-gray-500">${alert.lat.toFixed(2)}°N, ${alert.lon.toFixed(2)}°E</div></div>`);
                     });
                 }
 
-            }, [alerts, forecastData]); // Rerun if alerts or forecastData change
+            }, [alerts, processedForecastData]);
 
-            // Update marker position when slider changes
             useEffect(() => {
-                if (stormMarker.current && stormCircle.current && forecastData[sliderIndex]) {
-                    const newLatLng = [forecastData[sliderIndex].lat, forecastData[sliderIndex].lon];
+                if (stormMarker.current && stormCircle.current && processedForecastData[sliderIndex]) {
+                    const newLatLng = [processedForecastData[sliderIndex].LAT, processedForecastData[sliderIndex].LON];
                     stormMarker.current.setLatLng(newLatLng);
                     stormCircle.current.setLatLng(newLatLng);
                     if (mapInstance.current) {
                         mapInstance.current.panTo(newLatLng, {animate: true, duration: 0.5});
                     }
                 }
-            }, [sliderIndex, forecastData]);
+            }, [sliderIndex, processedForecastData]);
 
-            const currentPoint = forecastData[sliderIndex];
+            const currentPoint = processedForecastData[sliderIndex];
             
-            // NEW: Check if forecast data is available
-            if (!forecastData || forecastData.length === 0) {
-                return (
-                    <div className="fixed inset-0 bg-gray-900 text-white z-50 flex items-center justify-center">
-                        <div className="text-center bg-slate-800 p-8 rounded-lg">
-                            <h2 className="text-2xl font-bold text-yellow-400 mb-4">Không có dữ liệu quỹ đạo</h2>
-                            <p className="text-gray-400">Hệ thống không tìm thấy dữ liệu dự báo quỹ đạo bão để hiển thị.</p>
-                            <button onClick={onClose} className="mt-6 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-                                Đóng
-                            </button>
-                        </div>
-                    </div>
-                );
+            if (!currentPoint) {
+                 return <div className="fixed inset-0 bg-gray-900 text-white z-50 flex items-center justify-center"><div className="text-xl">Đang tải dữ liệu bản đồ...</div></div>;
             }
-
-            if (!currentPoint) return null; // Or a loading indicator
             
             const fmt = (n) => typeof n === 'number' ? n.toFixed(1) : '--';
             const fmtInt = (n) => typeof n === 'number' ? n.toFixed(0) : '--';
@@ -324,13 +289,10 @@
                     <div ref={mapRef} className="absolute inset-0 z-0"></div>
                     <div className="absolute inset-0 bg-gradient-to-r from-gray-900/90 via-gray-900/40 to-transparent pointer-events-none z-10 w-full md:w-1/2 lg:w-1/3"></div>
 
-                    {/* Left Panel */}
                     <div className="absolute top-0 left-0 h-full w-full md:w-[450px] z-20 p-6 overflow-y-auto custom-scrollbar flex flex-col gap-4 pointer-events-auto pb-32">
                         <div className="flex justify-between items-start">
                             <div>
-                                <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">
-                                    <i className="fa-solid fa-hurricane mr-2"></i>Storm Tracker Map
-                                </h1>
+                                <h1 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500"><i className="fa-solid fa-hurricane mr-2"></i>Storm Tracker Map</h1>
                                 <p className="text-gray-400 text-sm mt-1">Hệ thống giám sát & Dự báo quỹ đạo</p>
                             </div>
                             <button onClick={onClose} className="bg-red-500/50 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-colors text-2xl">&times;</button>
@@ -344,30 +306,30 @@
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-gray-400 text-xs">Vĩ độ</p>
-                                    <p className="text-xl font-mono font-bold">{fmt(currentPoint.lat)}°N</p>
+                                    <p className="text-xl font-mono font-bold">{fmt(currentPoint.LAT)}°N</p>
                                 </div>
                                 <div>
                                     <p className="text-gray-400 text-xs">Kinh độ</p>
-                                    <p className="text-xl font-mono font-bold">{fmt(currentPoint.lon)}°E</p>
+                                    <p className="text-xl font-mono font-bold">{fmt(currentPoint.LON)}°E</p>
                                 </div>
                                 <div>
                                     <p className="text-gray-400 text-xs">Sức gió</p>
-                                    <p className="text-lg font-bold text-blue-300">{fmt(currentPoint.wind)} m/s</p>
+                                    <p className="text-lg font-bold text-blue-300">{fmt(currentPoint.WMO_WIND)} m/s</p>
                                 </div>
                                 <div>
                                     <p className="text-gray-400 text-xs">Áp suất</p>
-                                    <p className="text-lg font-bold text-purple-300">{fmtInt(currentPoint.pressure)} hPa</p>
+                                    <p className="text-lg font-bold text-purple-300">{fmtInt(currentPoint.WMO_PRES)} hPa</p>
                                 </div>
                             </div>
                             <div className="mt-4 pt-3 border-t border-slate-700">
                                 <p className="text-xs text-gray-500 mb-1">Thời gian dự báo:</p>
-                                <p className="text-lg font-mono text-white font-bold">{currentPoint.time.toLocaleString('vi-VN', { weekday: 'short', hour: '2-digit', minute:'2-digit', day: '2-digit', month: '2-digit' })}</p>
+                                <p className="text-lg font-mono text-white font-bold">{currentPoint.time ? currentPoint.time.toLocaleString('vi-VN', { weekday: 'short', hour: '2-digit', minute:'2-digit', day: '2-digit', month: '2-digit' }) : 'N/A'}</p>
                             </div>
                         </div>
 
                         <div className="bg-slate-800/80 backdrop-blur-md border border-slate-700 rounded-xl p-5 shadow-lg flex-grow">
-                             <h2 class="text-lg font-semibold text-blue-400 mb-4 border-b border-slate-700 pb-2"><i className="fa-solid fa-cloud-sun-rain mr-2"></i>Cảnh báo khác</h2>
-                             <div class="space-y-2 custom-scrollbar pr-2" style={{maxHeight: '200px', overflowY: 'auto'}}>
+                             <h2 className="text-lg font-semibold text-blue-400 mb-4 border-b border-slate-700 pb-2"><i className="fa-solid fa-cloud-sun-rain mr-2"></i>Cảnh báo khác</h2>
+                             <div className="space-y-2 custom-scrollbar pr-2" style={{maxHeight: '200px', overflowY: 'auto'}}>
                                 {alerts.length > 0 ? alerts.map((alert, idx) => (
                                     <div key={idx} className="bg-slate-700/50 p-3 rounded-lg flex items-center gap-3">
                                         <div className="text-xl">{alert.icon}</div>
@@ -383,29 +345,27 @@
                          </div>
                     </div>
                     
-                    {/* Timeline Slider */}
                     <div className="absolute bottom-6 left-0 right-0 z-30 px-6 md:px-20 lg:px-64 pointer-events-none">
                         <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-600 rounded-2xl p-4 shadow-2xl pointer-events-auto">
-                             <div class="flex justify-between items-center mb-2">
-                                <span class="text-xs font-bold text-blue-400 uppercase tracking-wider">Dự báo Quỹ Đạo Bão Chính</span>
-                                <span class="text-xs text-gray-400">{sliderLabel}</span>
+                             <div className="flex justify-between items-center mb-2">
+                                <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Dự báo Quỹ Đạo Bão Chính</span>
+                                <span className="text-xs text-gray-400">{sliderLabel}</span>
                             </div>
                             <input
                                 type="range"
                                 min="0"
-                                max={forecastData.length - 1}
+                                max={processedForecastData.length - 1}
                                 value={sliderIndex}
                                 step="1"
                                 onChange={(e) => setSliderIndex(parseInt(e.target.value))}
                                 className="w-full"
                             />
-                             <div class="flex justify-between text-xs text-gray-400 mt-1 font-mono">
+                             <div className="flex justify-between text-xs text-gray-400 mt-1 font-mono">
                                 <span>Start</span>
                                 <span>End</span>
                             </div>
                         </div>
                     </div>
-
                 </div>
             );
         };
