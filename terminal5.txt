@@ -1,0 +1,37 @@
+16Tracking Prevention blocked access to storage for <URL>.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/@babel/standalone/babel.min.js.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/@babel/standalone/babel.min.js.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/@babel/standalone/babel.min.js.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/@babel/standalone/babel.min.js.
+weather-map:1  Tracking Prevention blocked access to storage for https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css.
+weather-map:1  Tracking Prevention blocked access to storage for https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css.
+weather-map:1  Tracking Prevention blocked access to storage for https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css.
+weather-map:1  Tracking Prevention blocked access to storage for https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/@babel/standalone@7.28.5/babel.min.js.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/@babel/standalone@7.28.5/babel.min.js.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/@babel/standalone@7.28.5/babel.min.js.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/@babel/standalone@7.28.5/babel.min.js.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/leaflet@1.9.4/dist/leaflet.css.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/leaflet@1.9.4/dist/leaflet.css.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/leaflet@1.9.4/dist/leaflet.css.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/leaflet@1.9.4/dist/leaflet.css.
+(index):64  cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation
+(anonymous) @ (index):64
+transformScriptTags.ts:258  You are using the in-browser Babel transformer. Be sure to precompile your scripts for production - https://babeljs.io/docs/setup/
+(anonymous) @ transformScriptTags.ts:258
+Inline Babel script:28 ClientLogger initialized.
+api/forecast_storm:1   Failed to load resource: the server responded with a status of 500 (INTERNAL SERVER ERROR)
+[NEW] Explain Console errors by using Copilot in Edge: click
+         
+         to explain an error. 
+        Learn more
+
+
+ DƯỚI ĐÂY LÀ NHỮNG GÌ ĐƯỢC HIỂN THỊ TRÊN WEB 
+        ⚠️
+Lỗi
+'lat'
+
+Chạy lệnh này trong terminal:
+
+python -m services.storm_prediction_service.final_storm_forecast

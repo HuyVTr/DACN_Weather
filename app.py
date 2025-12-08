@@ -19,9 +19,9 @@ SERVICES_DIR = os.path.join(CURRENT_DIR, "services")
 sys.path.insert(0, BACKEND_API_DIR)
 sys.path.append(os.path.join(SERVICES_DIR, "forecast_ml"))
 
-print(f"📂 Project Root: {CURRENT_DIR}")
-print(f"📂 Backend API: {BACKEND_API_DIR}")
-print(f"📂 Services: {SERVICES_DIR}")
+print(f"Project Root: {CURRENT_DIR}")
+print(f"Backend API: {BACKEND_API_DIR}")
+print(f"Services: {SERVICES_DIR}")
 
 # ============================================================================
 # IMPORT MODULES
@@ -29,10 +29,10 @@ print(f"📂 Services: {SERVICES_DIR}")
 try:
     from backend_api.models import db
     from backend_api.controllers import register_blueprints
-    print("✅ Import models và controllers thành công")
+    print(">> Import models và controllers thành công")
 except ImportError as e:
-    print(f"❌ Lỗi import: {e}")
-    print("⚠️  Kiểm tra cấu trúc thư mục backend_api/")
+    print(f">> Lỗi import: {e}")
+    print(">> Kiểm tra cấu trúc thư mục backend_api/")
     sys.exit(1)
 
 # ============================================================================
@@ -50,10 +50,10 @@ DATABASE_URI = f"postgresql://{DB_USERNAME}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{D
 
 # Cảnh báo bảo mật
 if DB_PASSWORD == '123456':
-    print("⚠️" * 30)
-    print("⚠️  CẢNH BÁO BẢO MẬT: Đang dùng mật khẩu mặc định!")
-    print("⚠️  Đặt biến môi trường: set DB_PASSWORD=your_password")
-    print("⚠️" * 30)
+    print("*" * 30)
+    print(">> CẢNH BÁO BẢO MẬT: Đang dùng mật khẩu mặc định!")
+    print(">> Đặt biến môi trường: set DB_PASSWORD=your_password")
+    print("*" * 30)
 
 # ============================================================================
 # TẠO FLASK APP
@@ -86,11 +86,11 @@ def create_app():
     
     # Log thông tin
     print("=" * 80)
-    print("✅ Flask Application đã được khởi tạo thành công!")
+    print(">> Flask Application đã được khởi tạo thành công!")
     print("=" * 80)
-    print(f"📁 Templates: {app.template_folder}")
-    print(f"📁 Static: {app.static_folder}")
-    print(f"🗄️  Database: {DB_HOST}/{DB_NAME}")
+    print(f"Templates: {app.template_folder}")
+    print(f"Static: {app.static_folder}")
+    print(f"Database: {DB_HOST}/{DB_NAME}")
     print("=" * 80)
     
     return app
@@ -101,9 +101,9 @@ def create_app():
 if __name__ == "__main__":
     app = create_app()
     
-    print("\n🚀 Khởi động Flask Development Server...")
-    print("🌐 Địa chỉ: http://127.0.0.1:5000")
-    print("💡 Nhấn Ctrl+C để dừng server\n")
+    print("\n>> Khởi động Flask Development Server...")
+    print(">> Địa chỉ: http://127.0.0.1:5000")
+    print(">> Nhấn Ctrl+C để dừng server\n")
     
     # Chạy Flask server
     app.run(

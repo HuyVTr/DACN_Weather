@@ -10,6 +10,8 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine, text
+import glob
+from services.storm_prediction_service.analysis_modules import TrajectoryAnalyzer
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -329,3 +331,98 @@ def api_get_forecast():
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Lỗi server: {str(e)}"}), 500
+
+# --- NEW STORM V2 API ENDPOINTS ---
+
+def get_latest_analysis_file():
+    """Finds the most recent '_analysis.json' file."""
+    list_of_files = glob.glob(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'project_data', 'processed_output', '*_analysis.json'))
+    if not list_of_files:
+        return None
+    latest_file = max(list_of_files, key=os.path.getctime)
+    return latest_file
+
+@forecast_bp.route('/api/forecast_storm')
+def api_get_storm_forecast():
+    """
+    API để lấy dữ liệu dự báo bão V2 mới nhất.
+    Đọc file JSON gần đây nhất từ thư mục processed_output.
+    """
+    latest_file = get_latest_analysis_file()
+    
+    if not latest_file:
+        return jsonify({
+            "status": "error",
+            "message": "Không tìm thấy file dự báo. Hãy chạy kịch bản 'final_storm_forecast.py' để tạo dữ liệu."
+        }), 404
+        
+    try:
+        with open(latest_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        predicted_path_raw = data.get('predicted_path', [])
+
+        # Convert keys to lowercase for the analyzer, which expects 'lat', 'lon'
+        predicted_path_for_analyzer = [
+            {k.lower(): v for k, v in record.items()}
+            for record in predicted_path_raw
+        ]
+        trajectory_analyzer = TrajectoryAnalyzer.analyze_trajectory(predicted_path_for_analyzer)
+        
+        # Perform stats calculation on the raw data with uppercase keys
+        stats = {
+            "max_wind": max(p.get('WMO_WIND', 0) for p in predicted_path_raw) if predicted_path_raw else 0,
+            "min_pressure": min(p.get('WMO_PRES', 9999) for p in predicted_path_raw) if predicted_path_raw else 9999,
+            "total_days": len(predicted_path_raw) / 24,
+            "avg_temp": np.mean([p.get('t_850', 0) for p in predicted_path_raw]).item() if predicted_path_raw else 0,
+            "avg_sst": np.mean([p.get('SST', 0) for p in predicted_path_raw]).item() if predicted_path_raw else 0,
+            "avg_humidity": np.mean([p.get('r_850', 0) for p in predicted_path_raw]).item() if predicted_path_raw else 0,
+            "has_weather_features": "SST" in (predicted_path_raw[0] if predicted_path_raw else {})
+        }
+
+        response_data = {
+            "status": "success",
+            "origin": data.get("origin_storm_details"),
+            "trajectory": trajectory_analyzer,
+            "stats": stats,
+            "data": predicted_path_raw, # Send the original raw data to the frontend
+            "analysis": data.get("trajectory_analysis", {})
+        }
+        
+        return jsonify(response_data)
+
+    except FileNotFoundError:
+        return jsonify({"status": "error", "message": "File dự báo không tồn tại."}), 404
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@forecast_bp.route('/api/all_alerts')
+def api_get_all_alerts():
+    """API để lấy tất cả các cảnh báo từ file all_alerts.json."""
+    alerts_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'project_data', 'grib2_output', 'all_alerts.json')
+    try:
+        with open(alerts_path, 'r', encoding='utf-8') as f:
+            alerts = json.load(f)
+        return jsonify(alerts)
+    except FileNotFoundError:
+        return jsonify([]) # Trả về mảng rỗng nếu không có file
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@forecast_bp.route('/api/weather')
+def api_get_weather_analysis():
+    """API lấy phân tích thời tiết từ file dự báo bão mới nhất."""
+    latest_file = get_latest_analysis_file()
+    if not latest_file:
+        return jsonify({"weather_analysis": None}), 404
+    
+    try:
+        with open(latest_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Trả về phần phân tích tương tự như logic cũ
+        analysis_data = data.get("trajectory_analysis", {}).get("weather_impact_analysis")
+        
+        return jsonify({"weather_analysis": analysis_data})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

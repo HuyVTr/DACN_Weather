@@ -51,4 +51,4 @@ Press CTRL+C to quit
 🐢 [CACHE MISS] Đang tính toán realtime cho TP. Hồ Chí Minh...
 127.0.0.1 - - [07/Dec/2025 23:45:46] "GET /weather-map HTTP/1.1" 200 -
 127.0.0.1 - - [07/Dec/2025 23:45:47] "GET /api/forecast HTTP/1.1" 400 -
-127.0.0.1 - - [07/Dec/2025 23:45:47] "GET /api/weather HTTP/1.1" 404 -
+127.0.0.1 - - [07/Dec/2025 23:45:47] "GET /api/weather HTTP/1.1" 404 

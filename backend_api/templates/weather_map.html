@@ -87,6 +87,112 @@
         const { useState, useEffect, useRef } = React;
 
         // ====================================================================
+        // CLIENT-SIDE LOGGER & DOWNLOADER
+        // ====================================================================
+        const ClientLogger = {
+            logs: [],
+            
+            _addLog(type, message, details) {
+                const timestamp = new Date().toISOString();
+                this.logs.push({ timestamp, type, message, details });
+                // Max 500 logs to prevent memory issues
+                if (this.logs.length > 500) {
+                    this.logs.shift();
+                }
+            },
+
+            init() {
+                const originalConsole = {
+                    log: console.log.bind(console),
+                    error: console.error.bind(console),
+                    warn: console.warn.bind(console),
+                    info: console.info.bind(console),
+                };
+
+                console.log = (message, ...args) => {
+                    originalConsole.log(message, ...args);
+                    this._addLog('LOG', message, args);
+                };
+                console.error = (message, ...args) => {
+                    originalConsole.error(message, ...args);
+                    this._addLog('ERROR', message, args);
+                };
+                console.warn = (message, ...args) => {
+                    originalConsole.warn(message, ...args);
+                    this._addLog('WARN', message, args);
+                };
+                console.info = (message, ...args) => {
+                    originalConsole.info(message, ...args);
+                    this._addLog('INFO', message, args);
+                };
+
+                // Global error handler
+                window.onerror = (message, source, lineno, colno, error) => {
+                    originalConsole.error('[Global Error]', { message, source, lineno, colno, error });
+                    this._addLog('FATAL', 'Unhandled global error', { message, source, lineno, colno });
+                    return false; // Let default handler run
+                };
+                
+                // Interaction logger
+                document.addEventListener('click', (event) => {
+                    const target = event.target;
+                    const details = `Clicked on <${target.tagName.toLowerCase()}>` +
+                                    (target.id ? ` id="${target.id}"` : '') +
+                                    (target.className ? ` class="${target.className}"` : '') +
+                                    (target.innerText ? ` with text "${target.innerText.substring(0, 30)}..."` : '');
+                    this._addLog('INTERACTION', details);
+                }, true); // Use capture phase to log event early
+
+                console.log("ClientLogger initialized.");
+            },
+
+            getLogsAsString() {
+                return this.logs.map(log => {
+                    let detailsStr = '';
+                    if (log.details) {
+                        try {
+                            detailsStr = JSON.stringify(log.details, null, 2);
+                        } catch (e) {
+                            detailsStr = 'Could not stringify details.';
+                        }
+                    }
+                    return `[${log.timestamp}] [${log.type}] ${log.message}\nDetails: ${detailsStr}\n${'-'.repeat(50)}`;
+                }).join('\n\n');
+            }
+        };
+
+        // Initialize logger immediately
+        ClientLogger.init();
+
+        const LogDownloader = () => {
+            const download = () => {
+                console.info("Preparing to download client log...");
+                const logData = ClientLogger.getLogsAsString();
+                const blob = new Blob([logData], { type: 'text/plain;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'client_log.txt';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                console.info("Log download triggered.");
+            };
+
+            return (
+                <button 
+                    onClick={download}
+                    className="fixed bottom-4 right-4 bg-red-600 text-white font-bold py-2 px-4 rounded-full shadow-lg z-[9999] hover:bg-red-700 transition-colors"
+                    title="Download client-side debug log"
+                >
+                    <i className="fa-solid fa-bug mr-2"></i> Download Client Log
+                </button>
+            );
+        };
+
+
+        // ====================================================================
         // Map Modal Component
         // ====================================================================
         const MapModal = ({ onClose, forecastApiData }) => {
@@ -191,6 +297,22 @@
             }, [sliderIndex, forecastData]);
 
             const currentPoint = forecastData[sliderIndex];
+            
+            // NEW: Check if forecast data is available
+            if (!forecastData || forecastData.length === 0) {
+                return (
+                    <div className="fixed inset-0 bg-gray-900 text-white z-50 flex items-center justify-center">
+                        <div className="text-center bg-slate-800 p-8 rounded-lg">
+                            <h2 className="text-2xl font-bold text-yellow-400 mb-4">Không có dữ liệu quỹ đạo</h2>
+                            <p className="text-gray-400">Hệ thống không tìm thấy dữ liệu dự báo quỹ đạo bão để hiển thị.</p>
+                            <button onClick={onClose} className="mt-6 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                                Đóng
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
             if (!currentPoint) return null; // Or a loading indicator
             
             const fmt = (n) => typeof n === 'number' ? n.toFixed(1) : '--';
@@ -297,23 +419,25 @@
             const [showMap, setShowMap] = useState(false);
             
             useEffect(() => {
-                fetch('/api/forecast')
+                fetch('/api/forecast_storm')
                     .then(res => res.json())
                     .then(result => {
-                        setData(result);
+                        if (result.status === 'success') {
+                            setData(result);
+                            // Extract weather analysis from the new structure
+                            if (result.trajectory && result.trajectory.weather_impact_analysis) {
+                                setWeatherAnalysis(result.trajectory.weather_impact_analysis);
+                            }
+                        } else {
+                            // Set data to the error object to display the message
+                            setData(result);
+                        }
                         setLoading(false);
                     })
                     .catch(err => {
                         console.error(err);
                         setLoading(false);
                     });
-                
-                fetch('/api/weather')
-                    .then(res => res.json())
-                    .then(result => {
-                        setWeatherAnalysis(result.weather_analysis);
-                    })
-                    .catch(err => console.error(err));
             }, []);
             
             if (loading) {
@@ -330,6 +454,7 @@
             if (data?.status === 'error') {
                 return (
                     <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-purple-900">
+                        <LogDownloader />
                         <div className="bg-red-500/20 border border-red-500 rounded-xl p-8 max-w-md">
                             <div className="text-red-400 text-6xl mb-4 text-center">⚠️</div>
                             <h2 className="text-2xl font-bold text-white mb-4 text-center">Lỗi</h2>
@@ -337,7 +462,7 @@
                             <div className="mt-6 text-center">
                                 <p className="text-sm text-gray-400 mb-4">Chạy lệnh này trong terminal:</p>
                                 <code className="bg-slate-800 px-4 py-2 rounded text-cyan-400 text-sm">
-                                    python storm_forecast_v2.py
+                                    python -m services.storm_prediction_service.final_storm_forecast
                                 </code>
                             </div>
                         </div>
@@ -352,6 +477,7 @@
             
             return (
                 <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-6">
+                    <LogDownloader />
                     {showMap && data?.status === 'success' && <MapModal onClose={() => setShowMap(false)} forecastApiData={data} />}
                     
                     <div className="max-w-7xl mx-auto mb-8">
@@ -623,7 +749,12 @@
             );
         };
         
-        ReactDOM.render(<StormTracker />, document.getElementById('root'));
+        try {
+            ReactDOM.render(<StormTracker />, document.getElementById('root'));
+        } catch (e) {
+            console.error("Fatal React rendering error:", e);
+            ClientLogger.error("Fatal React rendering error", { message: e.message, stack: e.stack });
+        }
     </script>
     {% endraw %}
 </body>

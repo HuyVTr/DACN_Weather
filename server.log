@@ -1,0 +1,43 @@
+Project Root: D:\DACN\train_leanring 4\weather_project
+Backend API: D:\DACN\train_leanring 4\weather_project\backend_api
+Services: D:\DACN\train_leanring 4\weather_project\services
+>> Import models và controllers thành công
+******************************
+>> CẢNH BÁO BẢO MẬT: Đang dùng mật khẩu mặc định!
+>> Đặt biến môi trường: set DB_PASSWORD=your_password
+******************************
+Đã đăng ký: main_bp
+✅ ĐÃ TẢI MÔ HÌNH XGBOOST THÀNH CÔNG
+Đã đăng ký: forecast_bp
+ĐÃ ĐĂNG KÝ THÀNH CÔNG: chart_bp → /chart hoạt động!
+================================================================================
+>> Flask Application đã được khởi tạo thành công!
+================================================================================
+Templates: D:\DACN\train_leanring 4\weather_project\backend_api\templates
+Static: D:\DACN\train_leanring 4\weather_project\backend_api\static
+Database: localhost/weather_project
+================================================================================
+
+>> Khởi động Flask Development Server...
+>> Địa chỉ: http://127.0.0.1:5000
+>> Nhấn Ctrl+C để dừng server
+
+ * Serving Flask app 'app'
+ * Debug mode: on
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:8000
+ * Running on http://192.168.1.23:8000
+Press CTRL+C to quit
+127.0.0.1 - - [08/Dec/2025 20:05:35] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [08/Dec/2025 20:05:35] "GET /static/css/style.css HTTP/1.1" 304 -
+127.0.0.1 - - [08/Dec/2025 20:05:35] "GET /static/js/main.js HTTP/1.1" 304 -
+127.0.0.1 - - [08/Dec/2025 20:05:35] "GET /api/provinces HTTP/1.1" 200 -
+127.0.0.1 - - [08/Dec/2025 20:05:36] "GET /weather-map HTTP/1.1" 200 -
+127.0.0.1 - - [08/Dec/2025 20:05:38] "GET /api/forecast_storm HTTP/1.1" 200 -
+127.0.0.1 - - [08/Dec/2025 20:05:42] "GET /api/all_alerts HTTP/1.1" 200 -
+127.0.0.1 - - [08/Dec/2025 20:05:49] "GET /weather-map HTTP/1.1" 200 -
+127.0.0.1 - - [08/Dec/2025 20:05:50] "GET /api/forecast_storm HTTP/1.1" 200 -
+127.0.0.1 - - [08/Dec/2025 20:05:50] "GET /api/all_alerts HTTP/1.1" 200 -
+127.0.0.1 - - [08/Dec/2025 20:06:12] "GET /api/forecast?province=TP.%20Hồ%20Chí%20Minh&days=1 HTTP/1.1" 200 -
+127.0.0.1 - - [08/Dec/2025 20:06:12] "GET /api/forecast?province=Hà%20Nội&days=1 HTTP/1.1" 200 -
