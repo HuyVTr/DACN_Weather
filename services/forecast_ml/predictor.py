@@ -33,70 +33,41 @@ def load_model():
 
 def load_historical_data(province_id, hours=168):
     """
-    Lấy dữ liệu lịch sử từ database (theo schema mới)
+    Tạo dữ liệu lịch sử giả định vì không có database.
     
     Args:
         province_id: ID của tỉnh
         hours: Số giờ lịch sử cần lấy (mặc định 168 = 7 ngày)
     
     Returns:
-        DataFrame với dữ liệu lịch sử
+        DataFrame với dữ liệu lịch sử giả định
     """
-    conn = connect_to_db()
-    query = """
-        SELECT 
-            timestamp,
-            temperature_2m,
-            apparent_temperature,
-            relative_humidity_2m,
-            precipitation,
-            rain,
-            showers,
-            cloud_cover,
-            cloud_cover_low,
-            cloud_cover_mid,
-            cloud_cover_high,
-            weather_code,
-            wind_speed_10m,
-            wind_direction_10m,
-            wind_gusts_10m,
-            pressure_msl,
-            shortwave_radiation,
-            direct_radiation,
-            uv_index,
-            sunshine_duration
-        FROM weather_data 
-        WHERE province_id = %s 
-        ORDER BY timestamp DESC 
-        LIMIT %s
-    """
-    df = pd.read_sql(query, conn, params=(province_id, hours))
-    conn.close()
-    
-    # Sort theo thứ tự thời gian tăng dần
-    df = df.sort_values('timestamp')
-    
-    # Fill missing values
-    fill_values = {
-        'apparent_temperature': df['temperature_2m'],
-        'precipitation': 0,
-        'rain': 0,
-        'showers': 0,
-        'cloud_cover': 50,
-        'cloud_cover_low': 0,
-        'cloud_cover_mid': 0,
-        'cloud_cover_high': 0,
-        'wind_gusts_10m': df['wind_speed_10m'],
-        'shortwave_radiation': 0,
-        'direct_radiation': 0,
-        'uv_index': 0,
-        'sunshine_duration': 0,
-        'weather_code': 1
+    # Tạo dữ liệu giả định 168 giờ
+    data = {
+        'timestamp': [datetime.now() - timedelta(hours=i) for i in range(hours -1 , -1, -1)],
+        'temperature_2m': np.random.uniform(20, 30, hours),
+        'apparent_temperature': np.random.uniform(20, 30, hours),
+        'relative_humidity_2m': np.random.uniform(60, 95, hours),
+        'precipitation': np.random.uniform(0, 5, hours),
+        'rain': np.random.uniform(0, 5, hours),
+        'showers': np.random.uniform(0, 2, hours),
+        'cloud_cover': np.random.uniform(30, 100, hours),
+        'cloud_cover_low': np.random.uniform(10, 50, hours),
+        'cloud_cover_mid': np.random.uniform(10, 50, hours),
+        'cloud_cover_high': np.random.uniform(0, 30, hours),
+        'weather_code': np.random.randint(0, 100, hours),
+        'wind_speed_10m': np.random.uniform(5, 20, hours),
+        'wind_direction_10m': np.random.uniform(0, 360, hours),
+        'wind_gusts_10m': np.random.uniform(10, 30, hours),
+        'pressure_msl': np.random.uniform(1000, 1020, hours),
+        'shortwave_radiation': np.random.uniform(0, 500, hours),
+        'direct_radiation': np.random.uniform(0, 300, hours),
+        'uv_index': np.random.uniform(0, 10, hours),
+        'sunshine_duration': np.random.uniform(0, 60, hours)
     }
     
-    for col, default_val in fill_values.items():
-        if col in df.columns:
-            df[col].fillna(default_val, inplace=True)
+    df = pd.DataFrame(data)
+    df = df.sort_values('timestamp').reset_index(drop=True) # Ensure sorted by time
     
     return df
 

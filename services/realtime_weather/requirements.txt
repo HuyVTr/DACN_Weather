@@ -1,0 +1,7 @@
+requests
+beautifulsoup4
+lxml
+xarray
+cfgrib
+fastapi
+uvicorn[standard]

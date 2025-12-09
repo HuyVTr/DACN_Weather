@@ -1,0 +1,43 @@
+ Luồng hoạt động chi tiết:
+
+  1. Khởi động hệ thống
+      - Bạn chạy file start_system.py.
+      - File này sẽ đóng vai trò "nhạc trưởng", khởi động đồng thời 2 thành phần quan trọng dưới đây và theo dõi chúng.
+
+  2. Worker (Tác vụ nền - `worker_v4_auto.py`)
+      - Tự động tải dữ liệu: Worker này sẽ chạy liên tục ở chế độ nền. Cứ mỗi 6 giờ, nó sẽ tự động kết nối đến máy chủ của NOAA (Cơ quan Khí quyển
+        và Đại dương Quốc gia Hoa Kỳ) để tải về dữ liệu dự báo thời tiết toàn cầu (gọi là GFS).
+      - Dữ liệu này có định dạng .grib2 và được lưu vào thư mục data.
+      - Phân tích và phát hiện bão: Sau khi có dữ liệu mới, Worker sẽ sử dụng các script trong thư mục storm_pipeline (cụ thể là storm_monitor.py)
+        để:
+        - Đọc file .grib2.
+        - Quét toàn bộ khu vực Biển Đông để tìm các vùng có áp suất thấp bất thường (dấu hiệu của xoáy thuận nhiệt đới).
+        - Nếu tìm thấy, nó sẽ phân tích thêm tốc độ gió để phân loại cường độ (VD: Áp thấp nhiệt đới, Bão nhiệt đới, Siêu bão cấp 5).
+      - Quét liên tục: Quá trình quét phát hiện bão này được thực hiện mỗi 5 phút để đảm bảo thông tin luôn mới.
+
+  3. API Server (Máy chủ - `app.py`)
+      - Đây là một máy chủ web được xây dựng bằng FastAPI (một framework của Python).
+      - Phục vụ giao diện: Nó có nhiệm vụ gửi file index.html và các file css, js trong thư mục static đến trình duyệt của bạn khi bạn truy cập
+        vào địa chỉ http://127.0.0.1:8000.
+      - Cung cấp WebSocket: Đây là phần quan trọng nhất. Nó tạo ra một kênh giao tiếp thời gian thực (WebSocket) giữa máy chủ và trình duyệt. Khi
+        Worker ở bước 2 phát hiện ra một cơn bão mới hoặc có cập nhật, nó sẽ gửi thông tin này đến API Server. API Server ngay lập tức "đẩy"
+        (push) thông tin này qua WebSocket đến trình duyệt của bạn.
+
+  4. Frontend (Giao diện người dùng - `index.html` & `static/js`)
+      - Khi bạn mở index.html, mã JavaScript trong đó (đặc biệt là realtime.js) sẽ tự động kết nối với WebSocket của API Server.
+      - Hiển thị dữ liệu: Giao diện sẽ lắng nghe thông tin được đẩy từ WebSocket và cập nhật bản đồ ngay lập tức mà không cần bạn phải tải lại
+        trang.
+      - Hiệu ứng gió: File wind.js cho thấy hệ thống có khả năng vẽ các hạt gió chuyển động trên bản đồ (tương tự như trang Windy.com), giúp trực
+        quan hóa luồng không khí và cường độ gió. Các file layers.js và timeline.js có thể dùng để quản lý các lớp bản đồ (như mây, mưa) và thanh
+        thời gian để xem dự báo.
+
+  ---
+
+
+B1 : chạy app.py trong thư mục root để run Server và mở web http://127.0.0.1:8000/ 
+B2 : chạy worker_v4_auto để kéo dữ liệu file grib2 về thư mục data 
+
+
+đọc dữ liệu file dạng table cd data run app.py chọn file 1 trong các file grib2 trong data 
+
+nên xoá tất cả các file grib2 sau mỗi lần kéo về 

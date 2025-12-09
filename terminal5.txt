@@ -1,0 +1,61 @@
+Tracking Prevention blocked access to storage for <URL>.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/@babel/standalone/babel.min.js.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/@babel/standalone/babel.min.js.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/@babel/standalone/babel.min.js.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/@babel/standalone/babel.min.js.
+weather-map:1  Tracking Prevention blocked access to storage for https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css.
+weather-map:1  Tracking Prevention blocked access to storage for https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css.
+weather-map:1  Tracking Prevention blocked access to storage for https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css.
+weather-map:1  Tracking Prevention blocked access to storage for https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/@babel/standalone@7.28.5/babel.min.js.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/@babel/standalone@7.28.5/babel.min.js.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/leaflet@1.9.4/dist/leaflet.css.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/leaflet@1.9.4/dist/leaflet.css.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/leaflet@1.9.4/dist/leaflet.css.
+weather-map:1  Tracking Prevention blocked access to storage for https://unpkg.com/leaflet@1.9.4/dist/leaflet.css.
+(index):64  cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation
+(anonymous) @ (index):64
+transformScriptTags.ts:258  You are using the in-browser Babel transformer. Be sure to precompile your scripts for production - https://babeljs.io/docs/setup/
+(anonymous) @ transformScriptTags.ts:258
+Inline Babel script:28 ClientLogger initialized.
+Inline Babel script:32  TypeError: Cannot read properties of undefined (reading '0')
+    at e._projectLatlngs (Polyline.js:197:14)
+    at e._projectLatlngs (Polyline.js:210:10)
+    at e._projectLatlngs (Polyline.js:210:10)
+    at e._project (Polyline.js:173:8)
+    at e._reset (Path.js:139:8)
+    at e.onAdd (Path.js:85:8)
+    at e._layerAdd (Layer.js:114:8)
+    at e.whenReady (Map.js:1477:13)
+    at e.addLayer (Layer.js:172:8)
+    at e.addTo (Layer.js:52:7)
+    at <anonymous>:231:10
+    at Id (react-dom.production.min.js:165:137)
+    at Xb (react-dom.production.min.js:200:284)
+    at react-dom.production.min.js:197:106
+    at S (react.production.min.js:17:25)
+    at MessagePort.U (react.production.min.js:21:229)
+console.error @ Inline Babel script:32
+Inline Babel script:46  [Global Error] Object
+window.onerror @ Inline Babel script:46
+react-dom.production.min.js:79  Uncaught TypeError: Cannot read properties of undefined (reading '0')
+    at e._projectLatlngs (Polyline.js:197:14)
+    at e._projectLatlngs (Polyline.js:210:10)
+    at e._projectLatlngs (Polyline.js:210:10)
+    at e._project (Polyline.js:173:8)
+    at e._reset (Path.js:139:8)
+    at e.onAdd (Path.js:85:8)
+    at e._layerAdd (Layer.js:114:8)
+    at e.whenReady (Map.js:1477:13)
+    at e.addLayer (Layer.js:172:8)
+    at e.addTo (Layer.js:52:7)
+    at <anonymous>:231:10
+    at Id (react-dom.production.min.js:165:137)
+    at Xb (react-dom.production.min.js:200:284)
+    at react-dom.production.min.js:197:106
+    at S (react.production.min.js:17:25)
+    at MessagePort.U (react.production.min.js:21:229)
+[NEW] Explain Console errors by using Copilot in Edge: click
+         
+         to explain an error. 
+        Learn more

@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Theo dõi Bão & Thời tiết - WeatherVN AI</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        /* --- ANIMATIONS & GLOBAL --- */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            /* ĐÃ SỬA: Xóa overflow: hidden để cho phép cuộn trang */
+            overflow-x: hidden; 
+        }
+
+        /* Background Blobs Animation */
+        @keyframes blob {
+            0% { transform: translate(0px, 0px) scale(1); }
+            33% { transform: translate(30px, -50px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+            100% { transform: translate(0px, 0px) scale(1); }
+        }
+        .animate-blob { animation: blob 7s infinite; }
+        .animation-delay-2000 { animation-delay: 2s; }
+        .animation-delay-4000 { animation-delay: 4s; }
+
+        /* Fade In Up */
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up { animation: fade-in-up 0.8s ease-out forwards; opacity: 0; }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.5); border-radius: 4px; }
+
+        /* Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none; /* Chrome, Safari */
+            -moz-appearance: none;    /* Firefox */
+            appearance: none;         /* Chuẩn CSS */
+            background: transparent;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px; width: 20px;
+            border-radius: 50%;
+            background: #3b82f6;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+            margin-top: -8px;
+            cursor: pointer;
+            border: 2px solid white;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 4px;
+        }
+
+        /* Spinner */
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            border-left-color: #3b82f6;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col text-slate-800">
+
+    <div class="fixed inset-0 -z-10 h-full w-full bg-gradient-to-br from-blue-50 via-blue-100 to-purple-100 dark:from-gray-900 dark:via-blue-900 dark:to-purple-900">
+        <div class="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 rounded-full bg-blue-400/20 blur-3xl animate-blob"></div>
+        <div class="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 rounded-full bg-purple-400/20 blur-3xl animate-blob animation-delay-2000"></div>
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 rounded-full bg-pink-400/20 blur-3xl animate-blob animation-delay-4000"></div>
+    </div>
+
+    <div id="loadingOverlay" class="fixed inset-0 z-[9999] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center transition-opacity duration-500">
+        <div class="spinner mb-4"></div>
+        <div class="text-blue-600 font-bold text-lg animate-pulse">Đang kết nối vệ tinh...</div>
+    </div>
+
+    <header class="bg-gradient-to-r from-blue-400/80 to-cyan-500/80 backdrop-blur-xl shadow-2xl sticky top-0 z-50 transition-all duration-300 flex-none">
+        <nav class="container mx-auto flex justify-between items-center py-4 px-4 lg:px-8">
+            <a href="http://127.0.0.1:5000/" class="flex items-center gap-2 text-white font-extrabold text-3xl tracking-tighter group transition-colors duration-300 hover:text-yellow-100">
+                <svg class="w-9 h-9 text-yellow-300 transform group-hover:scale-110 transition-transform duration-300" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4c-3.71 0-6.73 2.7-7.29 6.29C2.47 10.61 0 13.1 0 16c0 3.31 2.69 6 6 6h13c3.87 0 7-3.13 7-7 0-3.61-2.73-6.56-6.65-6.96zM12 20c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z" fill="url(#weather-gradient)"/>
+                    <defs>
+                        <linearGradient id="weather-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" style="stop-color:rgb(253, 230, 138);stop-opacity:1" /> <stop offset="100%" style="stop-color:rgb(255, 255, 255);stop-opacity:1" /> 
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <span class="relative">
+                    WeatherVN
+                    <span class="absolute -bottom-1 left-0 w-full h-1 bg-yellow-300 opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-sm"></span>
+                </span>
+            </a>
+    
+            <div class="hidden lg:flex space-x-10 text-white font-semibold">
+                <a href="http://127.0.0.1:5000/" class="nav-item">Trang chủ</a>
+                <a href="http://127.0.0.1:5000/forecast" class="nav-item">Dự báo thời tiết</a>
+                <a href="http://127.0.0.1:8000/" class="nav-item text-yellow-200" style="text-shadow: 0 0 10px rgba(253, 230, 138, 0.8);">Bản đồ thời tiết</a>
+                <a href="http://127.0.0.1:5000/chart" class="nav-item">Biểu đồ</a>
+                <a href="http://127.0.0.1:5000/news" class="nav-item">Tin tức</a>
+            </div>
+    
+            <button id="menu-toggle" class="lg:hidden p-2 rounded-full text-white hover:bg-white/20 transition-colors duration-300 focus:outline-none">
+                <svg id="menu-icon-open" class="w-7 h-7 transition-opacity duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+                </svg>
+                <svg id="menu-icon-close" class="w-7 h-7 absolute transition-opacity duration-300 opacity-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </nav>
+    
+        <div id="mobile-menu" class="lg:hidden h-0 overflow-hidden transition-all duration-500 ease-in-out bg-gray-800/95 backdrop-blur-sm">
+            <div class="container mx-auto px-4 py-4 space-y-2">
+                <a href="http://127.0.0.1:5000/" class="mobile-nav-item">Trang chủ</a>
+                <a href="http://127.0.0.1:5000/forecast" class="mobile-nav-item">Dự báo thời tiết</a>
+                <a href="http://127.0.0.1:8000/" class="mobile-nav-item text-yellow-300 bg-gray-700">Dự báo bão</a>
+                <a href="http://127.0.0.1:5000/news" class="mobile-nav-item">Tin tức</a>
+            </div>
+        </div>
+    
+        <style>
+            /* Styles from header.html */
+            .nav-item {
+                position: relative;
+                padding: 8px 0;
+                color: white;
+                transition: all 0.3s ease-in-out;
+                text-shadow: 0 0 5px rgba(255, 255, 255, 0); 
+            }
+            .nav-item::after {
+                content: '';
+                position: absolute;
+                bottom: 0; left: 50%; width: 0; height: 3px; 
+                background: linear-gradient(90deg, #60A5FA, #3B82F6); 
+                transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+                transform: translateX(-50%);
+                border-radius: 2px;
+                box-shadow: 0 0 8px rgba(59, 130, 246, 0);
+            }
+            .nav-item:hover {
+                color: #FDE68A; 
+                text-shadow: 0 0 10px rgba(253, 230, 138, 0.8);
+            }
+            .nav-item:hover::after {
+                width: 100%;
+                box-shadow: 0 0 15px rgba(59, 130, 246, 0.8);
+            }
+            .mobile-nav-item {
+                display: block;
+                color: #E5E7EB; 
+                font-weight: 500; 
+                padding: 10px 16px;
+                border-radius: 8px;
+                transition: background-color 0.3s, color 0.3s;
+                position: relative;
+                overflow: hidden;
+            }
+            .mobile-nav-item:hover {
+                background-color: #374151; 
+                color: #FFFFFF;
+            }
+        </style>
+    
+        <script>
+            // Header Script
+            document.addEventListener('DOMContentLoaded', function() {
+                const menuToggle = document.getElementById('menu-toggle');
+                const mobileMenu = document.getElementById('mobile-menu');
+                const menuIconOpen = document.getElementById('menu-icon-open');
+                const menuIconClose = document.getElementById('menu-icon-close');
+    
+                if(menuToggle && mobileMenu) {
+                    menuToggle.addEventListener('click', () => {
+                        const isMenuOpen = mobileMenu.classList.contains('menu-open');
+                        if (isMenuOpen) {
+                            mobileMenu.style.height = '0';
+                            mobileMenu.classList.remove('menu-open');
+                            menuIconClose.classList.remove('opacity-100');
+                            menuIconClose.classList.add('opacity-0');
+                            setTimeout(() => {
+                                menuIconClose.classList.add('absolute');
+                                menuIconOpen.classList.remove('absolute');
+                                menuIconOpen.classList.remove('opacity-0');
+                                menuIconOpen.classList.add('opacity-100');
+                            }, 150); 
+                        } else {
+                            mobileMenu.style.height = mobileMenu.scrollHeight + 'px';
+                            mobileMenu.classList.add('menu-open');
+                            menuIconOpen.classList.remove('opacity-100');
+                            menuIconOpen.classList.add('opacity-0');
+                            setTimeout(() => {
+                                menuIconOpen.classList.add('absolute');
+                                menuIconClose.classList.remove('absolute');
+                                menuIconClose.classList.remove('opacity-0');
+                                menuIconClose.classList.add('opacity-100');
+                            }, 150);
+                        }
+                    });
+                    
+                    window.addEventListener('resize', () => {
+                        if (window.innerWidth >= 1024) {
+                            mobileMenu.style.height = '0';
+                            mobileMenu.classList.remove('menu-open');
+                            menuIconOpen.classList.remove('absolute', 'opacity-0');
+                            menuIconClose.classList.add('absolute', 'opacity-0');
+                        }
+                    });
+                }
+            });
+        </script>
+    </header>
+    <main class="flex-1 relative p-4">
+        <div class="min-h-[85vh] grid grid-cols-1 lg:grid-cols-4 gap-6 max-w-[1920px] mx-auto pb-2">
+            
+            <div class="lg:col-span-3 relative group animate-fade-in-up" style="animation-delay: 0.1s;">
+                <div class="absolute inset-0 bg-white/40 backdrop-blur-xl border border-white/60 rounded-[2rem] shadow-2xl overflow-hidden z-0">
+                    <div id="map" class="absolute inset-0 z-0 bg-slate-100"></div>
+                    <canvas id="windCanvas" class="absolute inset-0 z-10 pointer-events-none"></canvas>
+                </div>
+                
+                <div id="colorLegend" class="absolute bottom-6 left-6 bg-white/80 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/50 z-[400] hidden max-w-xs transition-all hover:bg-white/90">
+                    <h3 class="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">
+                        <i class="fas fa-palette text-blue-500"></i> Chú thích
+                    </h3>
+                    <div id="legendContent" class="space-y-1.5 text-xs"></div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-1 flex flex-col gap-5 pr-2 pb-4 animate-fade-in-up" style="animation-delay: 0.3s;">
+                
+                <div id="stormAlertContainer" class="w-full">
+                    <div class="bg-white/60 backdrop-blur-md border border-white/50 rounded-[2rem] p-6 shadow-lg">
+                        <h4 class="text-slate-400 font-bold flex items-center gap-2 text-sm">
+                            <i class="fas fa-check-circle text-green-500"></i> Trạng thái bình thường
+                        </h4>
+                    </div>
+                </div>
+
+                <div id="stormInfoCard" class="hidden bg-gradient-to-br from-red-500/90 to-orange-500/90 backdrop-blur-md rounded-[2rem] p-6 shadow-xl text-white border border-white/20">
+                    <h3 class="font-bold text-lg mb-4 flex items-center gap-2 border-b border-white/20 pb-2">
+                        <i class="fas fa-radiation fa-spin"></i> Chi tiết Bão
+                    </h3>
+                    
+                    <div class="text-center mb-4">
+                        <div id="stormName" class="text-3xl font-black tracking-tight drop-shadow-md">--</div>
+                        <span id="stormClass" class="inline-block mt-2 px-3 py-1 bg-white/20 rounded-full text-xs font-bold border border-white/30 backdrop-blur-sm">
+                            --
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div class="bg-white/10 rounded-xl p-2 text-center">
+                            <div class="text-white/70 text-xs">Vị trí</div>
+                            <div id="stormPos" class="font-mono font-bold mt-1">--</div>
+                        </div>
+                        <div class="bg-white/10 rounded-xl p-2 text-center">
+                            <div class="text-white/70 text-xs">Gió giật</div>
+                            <div id="stormWind" class="font-mono font-bold mt-1 text-yellow-300">--</div>
+                        </div>
+                        <div class="bg-white/10 rounded-xl p-2 text-center">
+                            <div class="text-white/70 text-xs">Áp suất</div>
+                            <div id="stormPressure" class="font-mono font-bold mt-1">--</div>
+                        </div>
+                        <div class="bg-white/10 rounded-xl p-2 text-center">
+                            <div class="text-white/70 text-xs">Hướng</div>
+                            <div id="stormDirection" class="font-mono font-bold mt-1">--</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white/60 backdrop-blur-md rounded-[2rem] p-6 shadow-lg border border-white/50">
+                    <h3 class="text-slate-700 font-bold text-lg mb-5 flex items-center gap-2">
+                        <i class="fas fa-layer-group text-blue-500"></i> Lớp bản đồ
+                    </h3>
+                    
+                    <div class="space-y-3">
+                        <div class="layer-item group cursor-pointer relative overflow-hidden rounded-xl bg-white/40 border border-white/60 hover:bg-white/80 transition-all duration-300 p-3 flex items-center justify-between shadow-sm hover:shadow-md hover:-translate-y-0.5 active" onclick="toggleLayer('pressure')">
+                            <div class="flex items-center gap-3 relative z-10">
+                                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white shadow-md">
+                                    <i class="fas fa-thermometer-half"></i>
+                                </div>
+                                <span class="font-bold text-slate-700">Áp suất</span>
+                            </div>
+                            <div class="w-5 h-5 rounded-full border-2 border-slate-300 transition-colors duration-300" id="dot-pressure"></div>
+                        </div>
+
+                        <div class="layer-item group cursor-pointer relative overflow-hidden rounded-xl bg-white/40 border border-white/60 hover:bg-white/80 transition-all duration-300 p-3 flex items-center justify-between shadow-sm hover:shadow-md hover:-translate-y-0.5" onclick="toggleLayer('wind')">
+                            <div class="flex items-center gap-3 relative z-10">
+                                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center text-white shadow-md">
+                                    <i class="fas fa-wind"></i>
+                                </div>
+                                <span class="font-bold text-slate-700">Tốc độ gió</span>
+                            </div>
+                            <div class="w-5 h-5 rounded-full border-2 border-slate-300 transition-colors duration-300" id="dot-wind"></div>
+                        </div>
+
+                        <div class="layer-item group cursor-pointer relative overflow-hidden rounded-xl bg-white/40 border border-white/60 hover:bg-white/80 transition-all duration-300 p-3 flex items-center justify-between shadow-sm hover:shadow-md hover:-translate-y-0.5" onclick="toggleLayer('temp')">
+                            <div class="flex items-center gap-3 relative z-10">
+                                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-white shadow-md">
+                                    <i class="fas fa-fire"></i>
+                                </div>
+                                <span class="font-bold text-slate-700">Nhiệt độ</span>
+                            </div>
+                            <div class="w-5 h-5 rounded-full border-2 border-slate-300 transition-colors duration-300" id="dot-temp"></div>
+                        </div>
+
+                        <div class="layer-item group cursor-pointer relative overflow-hidden rounded-xl bg-white/40 border border-white/60 hover:bg-white/80 transition-all duration-300 p-3 flex items-center justify-between shadow-sm hover:shadow-md hover:-translate-y-0.5" onclick="toggleLayer('thunder')">
+                            <div class="flex items-center gap-3 relative z-10">
+                                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center text-white shadow-md">
+                                    <i class="fas fa-bolt"></i>
+                                </div>
+                                <span class="font-bold text-slate-700">Giông bão</span>
+                            </div>
+                            <div class="w-5 h-5 rounded-full border-2 border-slate-300 transition-colors duration-300" id="dot-thunder"></div>
+                        </div>
+
+                        <div class="layer-item group cursor-pointer relative overflow-hidden rounded-xl bg-white/40 border border-white/60 hover:bg-white/80 transition-all duration-300 p-3 flex items-center justify-between shadow-sm hover:shadow-md hover:-translate-y-0.5" onclick="toggleLayer('satellite')">
+                            <div class="flex items-center gap-3 relative z-10">
+                                <div class="w-10 h-10 rounded-full bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center text-white shadow-md">
+                                    <i class="fas fa-satellite"></i>
+                                </div>
+                                <span class="font-bold text-slate-700">Vệ tinh</span>
+                            </div>
+                            <div class="w-5 h-5 rounded-full border-2 border-slate-300 transition-colors duration-300" id="dot-satellite"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white/60 backdrop-blur-md rounded-[2rem] p-6 shadow-lg border border-white/50 mt-auto">
+                    <div class="flex justify-between items-end mb-3">
+                        <h3 class="text-slate-700 font-bold flex items-center gap-2">
+                            <i class="fas fa-clock text-blue-500"></i> Dòng thời gian
+                        </h3>
+                        <span id="currentDate" class="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-bold border border-blue-200">
+                            24h tới
+                        </span>
+                    </div>
+
+                    <input type="range" min="0" max="56" value="0" class="w-full mb-6" id="timelineSlider">
+                    
+                    <div class="grid grid-cols-3 gap-3">
+                        <button onclick="playTimeline()" class="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-2.5 rounded-xl shadow-lg shadow-blue-500/30 transition-all hover:-translate-y-1 font-bold">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button onclick="pauseTimeline()" class="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 py-2.5 rounded-xl shadow-sm transition-all hover:-translate-y-1 font-bold">
+                            <i class="fas fa-pause"></i>
+                        </button>
+                        <button onclick="resetTimeline()" class="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 py-2.5 rounded-xl shadow-sm transition-all hover:-translate-y-1 font-bold">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-gray-800 text-white pt-12 pb-8 border-t border-gray-700">
+        <div class="container mx-auto px-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+                <div>
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-8 h-8 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4c-3.71 0-6.73 2.7-7.29 6.29C2.47 10.61 0 13.1 0 16c0 3.31 2.69 6 6 6h13c3.87 0 7-3.13 7-7 0-3.61-2.73-6.56-6.65-6.96zM12 20c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/>
+                        </svg>
+                        <span class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-cyan-300">WeatherVN</span>
+                    </div>
+                    <p class="text-gray-400 text-sm leading-relaxed mb-4">
+                        Hệ thống dự báo thời tiết thông minh, cung cấp dữ liệu chính xác và nhanh chóng giúp bạn lên kế hoạch hiệu quả cho mọi hoạt động.
+                    </p>
+                    <div class="flex space-x-4">
+                        <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="fab fa-facebook"></i></a>
+                        <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="fab fa-twitter"></i></a>
+                        <a href="#" class="text-gray-400 hover:text-white transition-colors"><i class="fab fa-instagram"></i></a>
+                    </div>
+                </div>
+    
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-4 border-b border-gray-600 pb-2 inline-block">Khám phá</h3>
+                    <ul class="space-y-2">
+                        <li><a href="http://127.0.0.1:5000/" class="text-gray-400 hover:text-cyan-400 transition-colors flex items-center"><span class="mr-2">›</span> Trang chủ</a></li>
+                        <li><a href="http://127.0.0.1:5000/forecast" class="text-gray-400 hover:text-cyan-400 transition-colors flex items-center"><span class="mr-2">›</span> Dự báo thời tiết</a></li>
+                        <li><a href="http://127.0.0.1:8000/" class="text-gray-400 hover:text-cyan-400 transition-colors flex items-center"><span class="mr-2">›</span> Bản đồ vệ tinh</a></li>
+                        <li><a href="http://127.0.0.1:5000/chart" class="text-gray-400 hover:text-cyan-400 transition-colors flex items-center"><span class="mr-2">›</span> Biểu đồ phân tích</a></li>
+                        <li><a href="http://127.0.0.1:5000/news" class="text-gray-400 hover:text-cyan-400 transition-colors flex items-center"><span class="mr-2">›</span> Tin tức</a></li>
+                    </ul>
+                </div>
+    
+                <div>
+                    <h3 class="text-lg font-bold text-white mb-4 border-b border-gray-600 pb-2 inline-block">Về chúng tôi</h3>
+                    <ul class="space-y-2">
+                        <li><a href="http://127.0.0.1:5000/about" class="text-gray-400 hover:text-green-400 transition-colors flex items-center"><span class="mr-2">›</span> Giới thiệu</a></li>
+                        <li><a href="http://127.0.0.1:5000/contact" class="text-gray-400 hover:text-green-400 transition-colors flex items-center"><span class="mr-2">›</span> Liên hệ & Góp ý</a></li>
+                        <li><a href="http://127.0.0.1:5000/privacy" class="text-gray-400 hover:text-green-400 transition-colors flex items-center"><span class="mr-2">›</span> Chính sách bảo mật</a></li>
+                        <li><a href="http://127.0.0.1:5000/terms" class="text-gray-400 hover:text-green-400 transition-colors flex items-center"><span class="mr-2">›</span> Điều khoản sử dụng</a></li>
+                    </ul>
+                </div>
+            </div>
+    
+            <div class="border-t border-gray-700 pt-6 mt-6 text-center text-sm text-gray-500">
+                <p>&copy; 2025 WeatherVN</p>
+            </div>
+        </div>
+    </footer>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="/static/js/map_colors.js"></script>
+    <script src="/static/js/main.js"></script>
+    <script src="/static/js/layers.js"></script>
+    <script src="/static/js/wind.js"></script>
+    <script src="/static/js/timeline.js"></script>
+    <script src="/static/js/realtime.js"></script>
+    <script src="/static/js/alert_visualizer.js"></script>
+
+    <script>
+        // --- LOGIC UI ---
+        
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const loader = document.getElementById('loadingOverlay');
+                if(loader) {
+                    loader.style.opacity = '0';
+                    setTimeout(() => loader.style.display = 'none', 500);
+                }
+            }, 800);
+        });
+
+        const oldToggleLayer = window.toggleLayer; 
+        
+        window.toggleLayer = function(layer) {
+            if (typeof oldToggleLayer === 'function') {
+                oldToggleLayer(layer);
+            } else {
+                console.error("Hàm toggleLayer gốc chưa được load!");
+            }
+            
+            const layers = ['pressure', 'wind', 'temp', 'thunder', 'satellite'];
+            
+            layers.forEach(l => {
+                const dot = document.getElementById(`dot-${l}`);
+                const item = document.querySelector(`.layer-item[onclick*="${l}"]`);
+                
+                if(activeLayers[l]) {
+                    if(dot) {
+                        dot.classList.remove('border-slate-300', 'bg-transparent');
+                        dot.classList.add('border-blue-500', 'bg-blue-500', 'shadow-[0_0_10px_rgba(59,130,246,0.6)]');
+                    }
+                    if(item) {
+                        item.classList.add('bg-white/90', 'border-blue-200', 'shadow-md');
+                        item.classList.remove('bg-white/40', 'border-white/60');
+                    }
+                } else {
+                    if(dot) {
+                        dot.classList.remove('border-blue-500', 'bg-blue-500', 'shadow-[0_0_10px_rgba(59,130,246,0.6)]');
+                        dot.classList.add('border-slate-300', 'bg-transparent');
+                    }
+                    if(item) {
+                        item.classList.remove('bg-white/90', 'border-blue-200', 'shadow-md', 'active');
+                        item.classList.add('bg-white/40', 'border-white/60');
+                    }
+                }
+            });
+
+            updateLegend(activeLayers[layer] ? layer : null);
+        };
+
+        function updateLegend(layerType) {
+            const legendDiv = document.getElementById('colorLegend');
+            const contentDiv = document.getElementById('legendContent');
+
+            if (!layerType || !activeLayers[layerType]) {
+                legendDiv.classList.add('hidden');
+                return;
+            }
+
+            const legends = getColorScaleLegend(layerType); 
+
+            if (!legends || legends.length === 0) {
+                legendDiv.classList.add('hidden');
+                return;
+            }
+
+            contentDiv.innerHTML = legends.map(item => `
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-3 rounded shadow-sm border border-slate-200" style="background:${item.color}"></div>
+                    <div class="text-slate-600 font-medium">${item.value}</div>
+                </div>
+            `).join('');
+
+            legendDiv.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

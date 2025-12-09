@@ -1,0 +1,91 @@
+body {
+    background: #0f111a;
+    color: #fff;
+    font-family: Arial;
+}
+
+.container {
+    width: 90%;
+    margin: 20px auto;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 22px;
+    margin-bottom: 20px;
+}
+
+.panel {
+    background: #1a1d2b;
+    padding: 20px;
+    border-radius: 10px;
+    margin-bottom: 25px;
+}
+
+.input-row {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+}
+
+.select-box {
+    padding: 10px;
+    background: #0b0e16;
+    color: #fff;
+    border: 1px solid #333;
+    border-radius: 6px;
+    width: 350px;
+}
+
+.btn-view {
+    padding: 10px 20px;
+    background: #3a8bff;
+    border: none;
+    color: white;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.data-table {
+    background: #1a1d2b;
+    padding: 20px;
+    border-radius: 10px;
+    overflow-x: auto;
+}
+
+/* ---- TABLE STYLE FOR CLEAR COLUMN SEPARATION ---- */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+th {
+    background: #2b2f42;
+    padding: 10px;
+    border: 1px solid #444;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+td {
+    padding: 9px;
+    border: 1px solid #333;
+}
+
+/* Row striping */
+tr:nth-child(even) {
+    background: #181b28;
+}
+
+tr:nth-child(odd) {
+    background: #202434;
+}
+
+/* Hover effect */
+tr:hover {
+    background: #2c3145;
+}

@@ -82,7 +82,16 @@ class TrajectoryAnalyzer:
     @staticmethod
     def analyze_trajectory(predictions):
         if len(predictions) < 2:
-            return None
+            # Return a default structure instead of None to avoid frontend errors
+            return {
+                'total_distance': 0,
+                'avg_speed': 0,
+                'dominant_direction': 'Unknown',
+                'path_changes': [],
+                'enters_scs': False,
+                'scs_entry_point': None,
+                'threatens_vietnam': False
+            }
         
         analysis = {
             'total_distance': 0,
@@ -125,7 +134,6 @@ class TrajectoryAnalyzer:
                         'change_degrees': bearing_change
                     })
             
-            # Check if the storm enters the South China Sea (Biển Đông)
             scs_bounds = StormOriginDetector.FORMATION_ZONES['south_china_sea']['bounds']
             if (scs_bounds['lat'][0] <= curr['lat'] <= scs_bounds['lat'][1] and 
                 scs_bounds['lon'][0] <= curr['lon'] <= scs_bounds['lon'][1]):
@@ -137,7 +145,6 @@ class TrajectoryAnalyzer:
                         'lon': curr['lon']
                     }
             
-            # Check if the storm threatens Vietnam's major coastal cities
             vietnam_coords = [
                 ('Da Nang', 16.07, 108.22), 
                 ('Hai Phong', 20.84, 106.68), 
